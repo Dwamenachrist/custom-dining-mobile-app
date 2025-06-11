@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "custom-dining-app",
+    "slug": "custom-dining-app",
+    "version": "1.0.0",
+    "scheme": "custom-dining-app",
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-dev-launcher",
+        {
+          "launchMode": "most-recent"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "tsconfigPaths": true
+    },
+    "orientation": "portrait",
+        "icon": "./assets/custom-dining-splash.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-light.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F5F5F0",
+      "dark": {
+        "image": "./assets/splash-dark.png",
+        "resizeMode": "contain", 
+        "backgroundColor": "#2F7356"
+      }
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.kwasiagyapong.customdiningapp",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/custom-dining-splash.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.kwasiagyapong.customdiningapp"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c182f76b-528e-4133-b8cf-6b5ea4fa0e36"
+      }
+    }
+  }
+}
