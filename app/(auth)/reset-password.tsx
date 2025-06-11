@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, ActivityIndicator } from 'react-native';
+import { View, Text, KeyboardAvoidingView, Platform, ScrollView, SafeAreaView, StatusBar, ActivityIndicator, Image } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Button } from '../../components/Button';
 import { TextInput } from '../../components/TextInput';
@@ -30,43 +30,44 @@ export default function ResetPasswordScreen() {
   const handleResetPassword = async () => {
     setError('');
     setIsLoading(true);
+    router.replace('/(auth)/reset-password-success');
 
-    try {
-      // Validation
-      if (!newPassword || !confirmPassword) {
-        setError('Please fill in all fields.');
-        return;
-      }
+    // try {
+    //   // Validation
+    //   if (!newPassword || !confirmPassword) {
+    //     setError('Please fill in all fields.');
+    //     return;
+    //   }
 
-      if (!isPasswordValid) {
-        setError('Password must be at least 6 characters long.');
-        return;
-      }
+    //   if (!isPasswordValid) {
+    //     setError('Password must be at least 6 characters long.');
+    //     return;
+    //   }
 
-      if (!doPasswordsMatch) {
-        setError('Passwords do not match.');
-        return;
-      }
+    //   if (!doPasswordsMatch) {
+    //     setError('Passwords do not match.');
+    //     return;
+    //   }
 
-      console.log('🔑 Resetting password with token:', token);
+    //   console.log('🔑 Resetting password with token:', token);
 
-      // Call API service
-      const response = await AuthService.resetPassword(token, newPassword);
+    //   // Call API service
+    //   const response = await AuthService.resetPassword(token, newPassword);
 
-      if (response.success) {
-        console.log('✅ Password reset successfully');
+    //   if (response.success) {
+    //     console.log('✅ Password reset successfully');
         
-        // Navigate to success screen or login
-        router.replace('/(auth)/reset-password-success');
-      } else {
-        setError(response.message || 'Failed to reset password. Please try again.');
-      }
-    } catch (error) {
-      console.error('❌ Reset password error:', error);
-      setError('An unexpected error occurred. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
+    //     // Navigate to success screen or login
+    //     router.replace('/(auth)/reset-password-success');
+    //   } else {
+    //     setError(response.message || 'Failed to reset password. Please try again.');
+    //   }
+    // } catch (error) {
+    //   console.error('❌ Reset password error:', error);
+    //   setError('An unexpected error occurred. Please try again.');
+    // } finally {
+    //   setIsLoading(false);
+    // }
   };
 
   const getPasswordStrength = (password: string) => {
@@ -97,9 +98,9 @@ export default function ResetPasswordScreen() {
           keyboardShouldPersistTaps="handled">
 
           {/* Icon and Title */}
-          <View className="items-center mb-8">
-            <View className="w-20 h-20 rounded-full bg-green-50 items-center justify-center mb-6">
-              <Ionicons name="lock-closed" size={40} color={colors.primary} />
+          <View className="items-center mt-[10px] mb-[50px]">
+            <View className="w-20 h-20 mb-[120px] rounded-full items-center justify-center">
+              <Image source={require('../../assets/create-password.png')} className="w-[200px] h-[250px]" />
             </View>
             <Text className="text-2xl font-bold text-center mb-2 text-gray-800">
               Create New Password
@@ -157,22 +158,6 @@ export default function ResetPasswordScreen() {
             )}
           </View>
 
-          {/* Password Requirements */}
-          <View className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <Text className="text-blue-800 font-medium mb-2">Password Requirements:</Text>
-            <View className="space-y-1">
-              <Text className={`text-sm ${newPassword.length >= 6 ? 'text-green-600' : 'text-gray-500'}`}>
-                {newPassword.length >= 6 ? '✓' : '•'} At least 6 characters
-              </Text>
-              <Text className={`text-sm ${/(?=.*[a-z])(?=.*[A-Z])/.test(newPassword) ? 'text-green-600' : 'text-gray-500'}`}>
-                {/(?=.*[a-z])(?=.*[A-Z])/.test(newPassword) ? '✓' : '•'} Upper and lowercase letters (recommended)
-              </Text>
-              <Text className={`text-sm ${/(?=.*\d)/.test(newPassword) ? 'text-green-600' : 'text-gray-500'}`}>
-                {/(?=.*\d)/.test(newPassword) ? '✓' : '•'} At least one number (recommended)
-              </Text>
-            </View>
-          </View>
-
           {/* Error Messages */}
           {error ? (
             <View className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
@@ -183,7 +168,7 @@ export default function ResetPasswordScreen() {
           {/* Reset Password Button */}
           <View className="mb-6">
             <Button
-              title={isLoading ? "Updating Password..." : "Update Password"}
+              title={isLoading ? "Resetting Password..." : "Reset Password"}
               variant="primary"
               onPress={handleResetPassword}
               disabled={isLoading || !isFormValid}
@@ -193,13 +178,6 @@ export default function ResetPasswordScreen() {
                 <ActivityIndicator size="small" color={colors.primary} />
               </View>
             )}
-          </View>
-
-          {/* Contact Info (for reference) */}
-          <View className="items-center">
-            <Text className="text-xs text-gray-400">
-              Resetting password for: {contact}
-            </Text>
           </View>
 
         </ScrollView>

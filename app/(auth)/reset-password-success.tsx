@@ -1,7 +1,6 @@
-import { View, Text, SafeAreaView, StatusBar } from 'react-native';
+import { View, Text, SafeAreaView, StatusBar, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '../../components/Button';
-import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 
 export default function ResetPasswordSuccessScreen() {
@@ -20,22 +19,22 @@ export default function ResetPasswordSuccessScreen() {
         {/* Success Icon and Message */}
         <View className="items-center mb-12">
           <View className="w-24 h-24 rounded-full bg-green-100 items-center justify-center mb-8">
-            <Ionicons name="checkmark-circle" size={60} color="#10B981" />
+            <Image source={require('../../assets/password-reset.png')} className="w-[225px] h-[256px]" />
           </View>
           
-          <Text className="text-3xl font-bold text-center mb-4 text-gray-800">
-            Password Reset Successful!
+          <Text className="text-3xl font-bold text-center mb-4 mt-[85px] text-gray-800">
+            Password Reset
           </Text>
           
           <Text className="text-base text-gray-500 text-center leading-6 px-4">
-            Your password has been successfully updated. You can now sign in with your new password.
+            Your password has been changed successfully
           </Text>
         </View>
 
         {/* Continue Button */}
         <View className="px-4">
           <Button
-            title="Continue to Sign In"
+            title="Login"
             variant="primary"
             onPress={handleContinueToLogin}
           />

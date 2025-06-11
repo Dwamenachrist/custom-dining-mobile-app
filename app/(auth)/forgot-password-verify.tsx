@@ -59,42 +59,43 @@ export default function ForgotPasswordVerifyScreen() {
   const handleVerifyOTP = async () => {
     setError('');
     setIsLoading(true);
+    router.push('/(auth)/reset-password');
 
-    try {
-      const otpCode = otp.join('');
+    // try {
+    //   const otpCode = otp.join('');
 
-      if (otpCode.length !== 5) {
-        setError('Please enter the complete 5-digit verification code.');
-        return;
-      }
+    //   if (otpCode.length !== 5) {
+    //     setError('Please enter the complete 5-digit verification code.');
+    //     return;
+    //   }
 
-      console.log('🔐 Verifying OTP:', otpCode);
+    //   console.log('🔐 Verifying OTP:', otpCode);
 
-      // Call API service
-      const response = await AuthService.verifyOTP(contact, otpCode, method);
+    //   // Call API service
+    //   const response = await AuthService.verifyOTP(contact, otpCode, method);
 
-      if (response.success) {
-        console.log('✅ OTP verified successfully');
-        // Navigate to reset password screen
-        router.push({
-          pathname: '/(auth)/reset-password',
-          params: { 
-            token: response.data?.resetToken || '',
-            contact: contact 
-          }
-        });
-      } else {
-        setError(response.message || 'Invalid verification code. Please try again.');
-        // Clear OTP inputs on error
-        setOtp(['', '', '', '', '', '']);
-        otpRefs.current[0]?.focus();
-      }
-    } catch (error) {
-      console.error('❌ Verify OTP error:', error);
-      setError('An unexpected error occurred. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
+    //   if (response.success) {
+    //     console.log('✅ OTP verified successfully');
+    //     // Navigate to reset password screen
+    //     router.push({
+    //       pathname: '/(auth)/reset-password',
+    //       params: { 
+    //         token: response.data?.resetToken || '',
+    //         contact: contact 
+    //       }
+    //     });
+    //   } else {
+    //     setError(response.message || 'Invalid verification code. Please try again.');
+    //     // Clear OTP inputs on error
+    //     setOtp(['', '', '', '', '', '']);
+    //     otpRefs.current[0]?.focus();
+    //   }
+    // } catch (error) {
+    //   console.error('❌ Verify OTP error:', error);
+    //   setError('An unexpected error occurred. Please try again.');
+    // } finally {
+    //   setIsLoading(false);
+    // }
   };
 
   // Handle resend OTP
@@ -198,42 +199,43 @@ export default function ForgotPasswordVerifyScreen() {
         ) : null}
 
         {/* Verify Button */}
-        <View className="mb-6">
+        
           <Button
-            title={isLoading ? "Verifying..." : "Verify Code"}
+            title={isLoading ? "Verifying..." : "Verify OTP"}
             variant={otp.join('').length === 5 ? "primary" : "outlineGray"}
             onPress={handleVerifyOTP}
-            disabled={isLoading || otp.join('').length !== 6}
+            // disabled={isLoading || otp.join('').length !== 6}
           />
           {isLoading && (
             <View className="flex-row justify-center mt-2">
               <ActivityIndicator size="small" color={colors.primary} />
             </View>
           )}
-        </View>
+        
 
         {/* Resend Code */}
-        <View className="items-center">
-          <Text className="text-gray-500 mb-2">Didn't receive the code?</Text>
-          {timer > 0 ? (
-            <Text className="text-gray-400">
-              Resend code in {timer} seconds
-            </Text>
-          ) : (
-            <TouchableOpacity 
-              onPress={handleResendOTP} 
-              disabled={isResending}
-              className="flex-row items-center">
-              <Text className="font-semibold text-primary mr-1">
-                {isResending ? "Sending..." : "Resend Code"}
-              </Text>
-              {isResending && (
-                <ActivityIndicator size="small" color={colors.primary} />
-              )}
-            </TouchableOpacity>
+        <View className="items-center mt-6">
+          <View className="flex-row items-center">
+            <Text className="text-gray-500 mr-2">OTP not received?</Text>
+            {timer > 0 ? (
+              <Text className="text-gray-400">Resend code in {timer} seconds</Text>
+            ) : (
+              <Button
+                title={isResending ? "Sending..." : "Resend"}
+                variant="outline"
+                onPress={handleResendOTP}
+                disabled={isResending}
+                className='px-3 py-1'
+              />
+            )}
+          </View>
+          {isResending && (
+            <View className="mt-2">
+              <ActivityIndicator size="small" color={colors.primary} />
+            </View>
           )}
         </View>
       </View>
     </SafeAreaView>
   );
-} 
+}

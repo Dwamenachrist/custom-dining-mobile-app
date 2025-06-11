@@ -56,7 +56,7 @@ Button.displayName = 'Button';
 
 const styles = StyleSheet.create({
   button: {
-    borderRadius: 28,
+    borderRadius: 5,
     padding: 16,
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
