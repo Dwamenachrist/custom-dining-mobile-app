@@ -139,12 +139,12 @@ export default function LoginScreen() {
               resizeMode="contain"
             />
             <Text style={{ color: colors.primary }} className="text-3xl font-bold text-black">Welcome Back!</Text>
-            <Text className="text-base text-darkGray mt-2">Login to continue using the app</Text>
+            <Text className="text-base text-darkGray mt-2">Login to manage your restaurant on Custom Dining</Text>
           </View>
 
           {/* Form Inputs */}
           <TextInput
-            placeholder="Email/Phone Number"
+            placeholder="Business Email"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -229,7 +229,7 @@ export default function LoginScreen() {
             <View className="flex-row justify-center mb-6">
               <Text className="text-darkGray">New User? </Text>
               <TouchableOpacity 
-                onPress={() => router.push('/(auth)/signup')}
+                onPress={() => router.push('/(auth)/restaurant-signup')}
                 disabled={isLoading}>
                 <Text className="font-bold text-primary">Create an Account!</Text>
               </TouchableOpacity>

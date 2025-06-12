@@ -8,7 +8,7 @@ export default function ResetPasswordSuccessScreen() {
 
   const handleContinueToLogin = () => {
     // Navigate back to login screen
-    router.replace('/(auth)/login');
+    router.replace('/(auth)/customer-login');
   };
 
   return (

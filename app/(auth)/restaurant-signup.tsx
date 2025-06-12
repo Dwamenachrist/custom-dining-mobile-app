@@ -72,7 +72,7 @@ export default function SignupScreen() {
 
         // Show success message and redirect to login
         alert('Account created successfully! Please login to continue.');
-        router.push('/(auth)/login');
+        router.push('/(auth)/restaurant-login');
       } else {
         setError(response.message || 'Signup failed. Please try again.');
       }
@@ -121,8 +121,8 @@ export default function SignupScreen() {
           <Text style={{ color: colors.primary }} className="text-3xl font-bold text-center">
             Sign Up
           </Text>
-          <Text className="text-base text-darkGray mt-2 text-center">
-            Create Account To Start Your Journey With Us
+          <Text className="text-base text-darkGray mt-2 text-center w-[192px]">
+          Login to  manage your {'\n'}restaurant on Custom Dining
           </Text>
         </View>
         <ScrollView
@@ -296,7 +296,7 @@ export default function SignupScreen() {
             <View className="flex-row justify-center mb-6">
               <Text className="text-darkGray">Already Have An Account? </Text>
               <TouchableOpacity
-                onPress={() => router.push('/(auth)/login')}
+                onPress={() => router.push('/(auth)/restaurant-login')}
                 disabled={isLoading}>
                 <Text className="font-bold text-primary">Sign In</Text>
               </TouchableOpacity>

@@ -28,7 +28,7 @@ function RootLayoutNav() {
     } 
     // If the user is not logged in and not in the auth group, redirect them.
     else if (!isLoggedIn && !inAuthGroup) {
-      router.replace('/(auth)/onboarding');
+      router.replace('/(auth)/customer-onboard' as any);
     }
   }, [isLoading, isLoggedIn, segments]);
 

@@ -18,27 +18,27 @@ interface Slide {
 const slides: Slide[] = [
   {
     id: '1',
-    image: require('../../assets/onboard1.png'),
-    title: 'Welcome to Custom Dining',
-    description: 'Your companion for healthy, personalized eating—built for Nigerians, by Nigerians.',
+    image: require('../../assets/restaurant-onboard1.png'),
+    title: 'Welcome to Custom Dining for Restaurants',
+    description: 'Reach health-conscious diners across Nigeria. List your meals, get discovered, and grow with verified nutrition insights.',
   },
   {
     id: '2',
-    image: require('../../assets/onboard2.png'),
-    title: 'Meals made just for you',
-    description: 'Tell us your health goals and dietary needs. We’ll show you meals that match—low-carb, vegan, or diabetic-friendly.',
+    image: require('../../assets/restaurant-onboard2.png'),
+    title: 'Share Your Health-Friendly Dishes',
+    description: 'Highlight diabetic-safe, low-carb, or vegan meals. We’ll show them to users looking for smart options nearby.',
   },
   {
     id: '3',
-    image: require('../../assets/onboard3.png'),
-    title: 'Find restaurants near you',
-    description: 'Discover clean meals from trusted kitchens right within your LGA.',
+    image: require('../../assets/restaurant-onboard3.png'),
+    title: 'Add and Manage Your Menu with Ease',
+    description: 'You stay in control. Upload dishes, update availability, and highlight your healthy options—all in a few taps',
   },
   {
     id: '4',
-    image: require('../../assets/onboard4.png'),
-    title: 'Ready to eat smarter?',
-    description: 'Let’s help you dine well, feel better, and stay in control.',
+    image: require('../../assets/restaurant-onboard4.png'),
+    title: 'Attract the Right Customers',
+    description: 'Custom Dining connects you with health-conscious eaters in your area. More trust. More orders. More impact.',
   },
 ];
 
@@ -66,14 +66,14 @@ export default function OnboardingScreen() {
       flatListRef.current?.scrollToOffset({ offset, animated: true });
     } else {
       // On the last slide, "Get Started" button navigates to signup
-      router.push('/(auth)/login'); // Navigate to signup screen
+      router.push('/(auth)/restaurant-login'); // Navigate to signup screen
     }
   };
 
   // Handle the skip action
   const handleSkip = () => {
     // Navigate directly to the signup screen
-    router.push('/(auth)/login'); // Navigate to signup screen
+    router.push('/(auth)/restaurant-login'); // Navigate to signup screen
   };
 
 

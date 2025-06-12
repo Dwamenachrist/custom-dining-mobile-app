@@ -7,7 +7,7 @@ const TABS = [
   { name: 'Home', icon: 'home-outline', route: '/home' },
   { name: 'Search', icon: 'search-outline', route: '/search' },
   { name: 'Order', icon: 'add', route: '/order', center: true },
-  { name: 'Plans', icon: 'calendar-outline', route: '/plans' },
+  { name: 'Setting', icon: 'settings-outline', route: '/setting' },
   { name: 'Profile', icon: 'person-outline', route: '/profile' },
 ];
 
