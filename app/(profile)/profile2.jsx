@@ -99,7 +99,7 @@ export default function ProfileScreen() {
 
             <View className="mt-4">
               <Button 
-              title={'Save'} 
+              title={'Saved'} 
               variant="primary" 
               onPress={handleProfile}
               />
