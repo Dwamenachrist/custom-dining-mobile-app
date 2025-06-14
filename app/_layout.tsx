@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from '../auth-context';
 import { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { colors } from '../theme/colors';
+import { useFonts } from 'expo-font';
 
 export const unstable_settings = {
   // Ensure that reloading on `/modal` keeps a back button present.
@@ -15,6 +16,13 @@ function RootLayoutNav() {
   const { isLoggedIn, isLoading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
+  const [loaded] = useFonts({
+    PoppinsRegular : require('../assets/fonts/Poppins-Regular.ttf'),
+    PoppinsBold : require('../assets/fonts/Poppins-Bold.ttf'),
+    SemiBold : require('../assets/fonts/Poppins-SemiBold.ttf'),
+    Medium :require('../assets/fonts/Poppins-Medium.ttf'),
+    Italic:require('../assets/fonts/Poppins-Italic.ttf')
+  });
 
   useEffect(() => {
     // We are still checking for a token, do nothing.
@@ -44,6 +52,7 @@ function RootLayoutNav() {
   // Once loading is complete, the router will handle showing the correct stack.
   return (
     <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(profile)"/>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="modal" options={{ presentation: 'modal' }} />

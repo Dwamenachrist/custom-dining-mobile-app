@@ -6,6 +6,7 @@ import { TextInput } from '../../components/TextInput';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import AuthService from '../../services/authService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -28,6 +29,7 @@ export default function SignupScreen() {
 
   // Handlers
   const handleSignup = async () => {
+    AsyncStorage.setItem('userName',firstName+lastName)
     setError('');
     setIsLoading(true);
 
