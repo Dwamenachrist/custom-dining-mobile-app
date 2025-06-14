@@ -2,11 +2,13 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Switch, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
+import { useRouter } from 'expo-router';
 
 export default function SettingScreen() {
   const [mealAlerts, setMealAlerts] = React.useState(true);
   const [recommendations, setRecommendations] = React.useState(true);
   const [darkMode, setDarkMode] = React.useState(false);
+  const router = useRouter();
 
   // Placeholder handlers
   const handleManageProfile = () => {};
@@ -17,7 +19,9 @@ export default function SettingScreen() {
   const handleVoiceInput = () => {};
   const handleFAQ = () => {};
   const handleHelp = () => {};
-  const handleTerms = () => {};
+  const handleTerms = () => {
+    router.push('/terms');
+  };
   const handleDeleteAccount = () => {};
   const handleLogout = () => {};
 
