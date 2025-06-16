@@ -63,6 +63,7 @@ export default function SignupScreen() {
         phoneNumber: countryCode + phoneNumber,
         password,
         confirmPassword,
+        role: 'user',
       });
 
       if (response.success) {

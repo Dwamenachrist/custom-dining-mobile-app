@@ -22,50 +22,43 @@ export default function ForgotPasswordEmailScreen() {
     const handleSendOTP = async () => {
         setError('');
         setIsLoading(true);
-        router.push({
-                        pathname: '/(auth)/forgot-password-verify',
-                        params: {
-                            method: 'email',
-                            contact: email
-                        }
-                    });
+        
+        try {
+            // Validation
+            if (!email) {
+                setError('Please enter your email address.');
+                return;
+            }
 
-        // try {
-        //     // Validation
-        //     if (!email) {
-        //         setError('Please enter your email address.');
-        //         return;
-        //     }
+            if (!isEmailValid) {
+                setError('Please enter a valid email address.');
+                return;
+            }
 
-        //     if (!isEmailValid) {
-        //         setError('Please enter a valid email address.');
-        //         return;
-        //     }
+            console.log('📧 Sending forgot password request for email:', email);
 
-        //     console.log('📧 Sending OTP to email:', email);
+            // Call forgot password API
+            const response = await AuthService.forgotPassword(email);
 
-        //     // Call API service (you'll need to add this method to AuthService)
-        //     const response = await AuthService.sendOTPToEmail(email);
-
-        //     if (response.success) {
-        //         console.log('✅ OTP sent successfully');
-        //         // Navigate to OTP verification screen with email
-        //         router.push({
-        //             pathname: '/(auth)/forgot-password-verify',
-        //             params: {
-        //                 method: 'email',
-        //                 contact: email
-        //             }
-        //         });
-        //     } else {
-        //         setError(response.message || 'Failed to send OTP. Please try again.');
-        //     }
-        // } catch (error) {
-        //     console.error('❌ Send OTP error:', error);
-        //     setError('An unexpected error occurred. Please try again.');
-        // } finally {
-        //     setIsLoading(false);
-        // }
+            if (response.success) {
+                console.log('✅ Forgot password email sent successfully');
+                // Navigate to OTP verification screen with email
+                router.push({
+                    pathname: '/(auth)/forgot-password-verify',
+                    params: {
+                        method: 'email',
+                        contact: email
+                    }
+                });
+            } else {
+                setError(response.message || 'Failed to send reset email. Please try again.');
+            }
+        } catch (error) {
+            console.error('❌ Forgot password error:', error);
+            setError('An unexpected error occurred. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleBack = () => {

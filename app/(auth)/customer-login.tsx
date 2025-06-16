@@ -62,43 +62,35 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     setError('');
     setIsLoading(true);
-    setIsLoggedIn(true);
-    router.push('/(tabs)/home');
-    // try {
-    //   if (!email || !password) {
-    //     setError('Please enter both email and password.');
-    //     return;
-    //   }
+    try {
+      if (!email || !password) {
+        setError('Please enter both email and password.');
+        return;
+      }
 
-    //   // Handle Remember Me before login attempt
-    //   if (rememberMe) {
-    //     await AsyncStorage.setItem('remembered_email', email);
-    //     console.log('💾 Email saved for future logins');
-    //   } else {
-    //     await AsyncStorage.removeItem('remembered_email');
-    //     console.log('🗑️ Email removed from saved data');
-    //   }
+      // Handle Remember Me before login attempt
+      if (rememberMe) {
+        await AsyncStorage.setItem('remembered_email', email);
+        console.log('💾 Email saved for future logins');
+      } else {
+        await AsyncStorage.removeItem('remembered_email');
+        console.log('🗑️ Email removed from saved data');
+      }
 
-    //   // 🧪 TESTING: Use smart login to test both approaches
-    //   console.log('🎯 Testing both login approaches...');
-    //   const response = await AuthService.smartLogin({
-    //     email,
-    //     password,
-    //   });
+      // Always login as user
+      const response = await AuthService.login({ email, password, role: 'user' });
 
-    //   if (response.success) {
-    //     console.log('Login successful:', response.data);
-    //     setIsLoggedIn(true);
-    //     // The RootLayout will automatically redirect to the (tabs) stack.
-    //   } else {
-    //     setError(response.message || 'Login failed. Please check your credentials.');
-    //   }
-    // } catch (error) {
-    //   console.error('Login error:', error);
-    //   setError('An unexpected error occurred. Please try again.');
-    // } finally {
-    //   setIsLoading(false);
-    // }
+      if (response.success) {
+        setIsLoggedIn(true);
+        // The RootLayout will automatically redirect to the (tabs) stack.
+      } else {
+        setError(response.message || 'Login failed. Please check your credentials.');
+      }
+    } catch (error) {
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleForgotPassword = () => {

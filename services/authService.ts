@@ -7,7 +7,6 @@ import { ENDPOINTS } from './config';
 const STORAGE_KEYS = {
   AUTH_TOKEN: 'auth_token',           // Where you store login proof
   REFRESH_TOKEN: 'refresh_token',     // Backup login proof  
-  USER_DATA: 'user_data',             // User profile info
   PHONE_NUMBER: 'user_phone_number',  // Extra data we collect
 } as const;
 
@@ -22,8 +21,7 @@ class AuthService {
       username: `${formData.firstName} ${formData.lastName}`.trim(),
       email: formData.email,
       password: formData.password,
-      // Default role for regular users (not admin)
-      role: 'user',
+      role: formData.role,
     };
     
     console.log('📤 Frontend data:', formData);
@@ -97,89 +95,24 @@ class AuthService {
     }
   }
 
-  // 🧪 EXPERIMENTAL: Login with Role Field
-  // This tests the alternative approach (email + password + role)
-  async loginWithRole(credentials: LoginRequest, role: string = 'user'): Promise<ApiResponse<AuthResponse>> {
-    try {
-      console.log('🧪 TESTING: Login WITH role field...');
-      
-      const loginDataWithRole = {
-        ...credentials,
-        role: role,  // Add role field
-      };
-      
-      console.log('📤 Sending login data (WITH role):', loginDataWithRole);
-      
-      // Make login API call with role
-      const response = await api.post<AuthResponse>(ENDPOINTS.login, loginDataWithRole);
-      
-      if (response.success && response.data) {
-        console.log('✅ Login with role successful!');
-        
-        // Store authentication data (token, user info)
-        await this.storeAuthData(response.data);
-        console.log('💾 Auth data stored successfully');
-      }
-      
-      return response;
-    } catch (error) {
-      console.error('❌ Login with role error:', error);
-      return {
-        success: false,
-        message: 'Login with role failed. Please check your credentials.',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
-  }
-
-  // 🎯 SMART LOGIN: Try both approaches automatically
-  async smartLogin(credentials: LoginRequest): Promise<ApiResponse<AuthResponse>> {
-    console.log('🎯 SMART LOGIN: Testing both approaches...');
-    
-    // TEST 1: Try without role first (cleaner API)
-    console.log('\n--- TEST 1: Login WITHOUT role ---');
-    const firstAttempt = await this.login(credentials);
-    
-    if (firstAttempt.success) {
-      console.log('✅ SUCCESS: Login without role worked!');
-      return firstAttempt;
-    }
-    
-    // TEST 2: If first failed, try with role
-    console.log('\n--- TEST 2: Login WITH role ---');
-    console.log('ℹ️ First attempt failed, trying with role field...');
-    
-    const secondAttempt = await this.loginWithRole(credentials, 'user');
-    
-    if (secondAttempt.success) {
-      console.log('✅ SUCCESS: Login with role worked!');
-      console.log('💡 NOTE: Backend requires role field in login');
-      return secondAttempt;
-    }
-    
-    // Both failed
-    console.log('❌ BOTH TESTS FAILED');
-    console.log('💭 Possible issues:');
-    console.log('   1. Wrong credentials');
-    console.log('   2. Server not running');
-    console.log('   3. Different API structure than documented');
-    
-    return secondAttempt; // Return the last attempt's error
-  }
-
   // 📝 STEP 4: Forgot Password (Original email-based)
   // This is what happens when user clicks "Forgot Password"
   async forgotPassword(email: string): Promise<ApiResponse<{ message: string }>> {
     try {
       console.log('📧 Sending password reset email...');
       
+      // Use POST as the server expects a POST for forgot-password
       const response = await api.post<{ message: string }>(ENDPOINTS.forgotPassword, { email });
       
       if (response.success) {
         console.log('✅ Password reset email sent');
       }
       
-      return response;
+      return {
+        success: response.success,
+        message: response.message || 'Password reset email sent successfully',
+        data: response.data
+      };
     } catch (error) {
       console.error('❌ Forgot password error:', error);
       return {
@@ -351,33 +284,6 @@ class AuthService {
     }
   }
 
-  // Get stored user data
-  async getUserData(): Promise<any | null> {
-    try {
-      const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
-      return userData ? JSON.parse(userData) : null;
-    } catch (error) {
-      console.error('❌ Get user data error:', error);
-      return null;
-    }
-  }
-
-  // Get additional user data (phone, name breakdown)
-  async getAdditionalUserData(): Promise<any | null> {
-    try {
-      const phoneNumber = await AsyncStorage.getItem(STORAGE_KEYS.PHONE_NUMBER);
-      const userData = await this.getUserData();
-      
-      return {
-        ...userData,
-        phoneNumber,
-      };
-    } catch (error) {
-      console.error('❌ Get additional user data error:', error);
-      return null;
-    }
-  }
-
   // 📝 PRIVATE METHODS: Internal helper functions
 
   // Store authentication data (token, user info)
@@ -385,7 +291,6 @@ class AuthService {
     try {
       const operations = [
         AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, authData.token),
-        AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(authData.user)),
       ];
 
       if (authData.refreshToken) {
@@ -398,7 +303,7 @@ class AuthService {
       console.log('💾 Auth data stored successfully');
     } catch (error) {
       console.error('❌ Store auth data error:', error);
-      throw error;
+      // Do not throw error, allow login to proceed
     }
   }
 
@@ -432,9 +337,7 @@ class AuthService {
       await AsyncStorage.multiRemove([
         STORAGE_KEYS.AUTH_TOKEN,
         STORAGE_KEYS.REFRESH_TOKEN,
-        STORAGE_KEYS.USER_DATA,
         STORAGE_KEYS.PHONE_NUMBER,
-        'additional_user_data',
       ]);
       console.log('🧹 Auth data cleared successfully');
     } catch (error) {
@@ -442,7 +345,21 @@ class AuthService {
       throw error;
     }
   }
+
+  // Register a new restaurant
+  async registerRestaurant(data: any): Promise<ApiResponse<any>> {
+    try {
+      const response = await api.post(ENDPOINTS.restaurants, data);
+      return response;
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Failed to register restaurant. Please try again.',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
 }
 
 // Export a singleton instance
-export default new AuthService(); 
+export default new AuthService();

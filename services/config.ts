@@ -1,6 +1,6 @@
 // Environment configuration
 export const ENV = {
-  DEV: 'http://localhost:3006/api',  // Updated to match actual backend
+  DEV: 'https://custom-dining.onrender.com/api',
   STAGING: 'https://api-staging.example.com/api', 
   PROD: 'https://api.example.com/api',
 } as const;
@@ -20,7 +20,7 @@ export const API_CONFIG = {
 // API endpoints - Updated to match actual backend
 export const ENDPOINTS = {
   // Authentication - Updated paths
-  signup: '/auth/register',              // Changed from /auth/signup
+  signup: '/auth/register',
   login: '/auth/login',
   logout: '/auth/logout',
   forgotPassword: '/auth/forgot-password',

@@ -42,11 +42,13 @@ export interface SignupFormData {
   phoneNumber: string;
   password: string;
   confirmPassword: string;
+  role: string;
 }
 
 export interface LoginRequest {
   email: string;
   password: string;
+  role: string;
 }
 
 // Backend registration response (based on docs)

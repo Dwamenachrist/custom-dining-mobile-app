@@ -1,5 +1,4 @@
 import { router } from 'expo-router';
-import React from 'react';
 import {View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Pressable} from 'react-native';
 
 
@@ -25,7 +24,7 @@ const recommendedMeals = [
 ];
 
  const handleCardPress = (meal: { id : number}) => {
-  router.push(`/meal/${meal.id}`);
+  router.push(`/meal/${meal.id}` as any);
 };
 
 
