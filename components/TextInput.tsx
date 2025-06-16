@@ -8,11 +8,12 @@ type Props = TextInputProps & {
   errorMessage?: string;
   variant?: 'default' | 'error' | 'success';
   containerClassName?: string;
+  rightIcon?: React.ReactNode;
 };
 
 export const TextInput = forwardRef<RNTextInput, Props>(
   (
-    { label, errorMessage, variant = 'default', containerClassName = '', style, ...props },
+    { label, errorMessage, variant = 'default', containerClassName = '', style, rightIcon, ...props },
     ref
   ) => {
     const [isFocused, setIsFocused] = useState(false);
@@ -72,6 +73,7 @@ export const TextInput = forwardRef<RNTextInput, Props>(
               <Ionicons name="close-circle" size={24} color={colors.error} />
             </View>
           )}
+          {rightIcon && <View className="p-2 mr-1">{rightIcon}</View>}
         </View>
         {errorMessage && <Text className="mt-1 text-error">{errorMessage}</Text>}
       </View>
