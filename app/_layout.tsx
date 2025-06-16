@@ -52,7 +52,6 @@ function RootLayoutNav() {
   // Once loading is complete, the router will handle showing the correct stack.
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(profile)"/>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
