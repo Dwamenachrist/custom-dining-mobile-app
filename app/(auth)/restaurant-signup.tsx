@@ -1,11 +1,14 @@
+import React from 'react';
 import { useState } from 'react';
 import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Image, TouchableOpacity, SafeAreaView, StatusBar, Pressable, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Button } from '../../components/Button';
 import { TextInput } from '../../components/TextInput';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import AuthService from '../../services/authService';
+import { Picker } from '@react-native-picker/picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -21,10 +24,28 @@ export default function SignupScreen() {
   const [countryCode, setCountryCode] = useState('+234');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [certUploaded, setCertUploaded] = useState(false);
+  const [certFiles, setCertFiles] = useState<string[]>([]);
+
+  // Add city dropdown options
+  const cityOptions = ['Lagos', 'Abuja', 'Port Harcourt', 'Kano'];
+  const [city, setCity] = useState('');
 
   // Validation helpers
   const isPasswordValid = password.length >= 8;
   const doPasswordsMatch = password === confirmPassword && confirmPassword.length > 0;
+
+  // When returning from upload-certifications, check if cert was uploaded
+  useFocusEffect(
+    React.useCallback(() => {
+      (async () => {
+        const uploaded = await AsyncStorage.getItem('certUploaded');
+        setCertUploaded(uploaded === 'true');
+        const files = await AsyncStorage.getItem('certFiles');
+        setCertFiles(files ? JSON.parse(files) : []);
+      })();
+    }, [])
+  );
 
   // Handlers
   const handleSignup = async () => {
@@ -84,25 +105,18 @@ export default function SignupScreen() {
     }
   };
 
-  const handleSocialSignup = (provider: 'google' | 'microsoft' | 'apple') => {
-    console.log(`Signup with ${provider}`);
-    // TODO: Implement social authentication
-  };
-
   const handleLanguageChange = () => {
     console.log('Language change pressed');
   };
 
-
-
   const handleTermsPress = () => {
     console.log('Terms of Use pressed');
-    // TODO: Navigate to terms page
+    router.push('/terms');
   };
 
   const handlePrivacyPress = () => {
     console.log('Privacy Policy pressed');
-    // TODO: Navigate to privacy policy page
+    router.push('/terms');
   };
 
   return (
@@ -121,8 +135,8 @@ export default function SignupScreen() {
           <Text style={{ color: colors.primary }} className="text-3xl font-bold text-center">
             Sign Up
           </Text>
-          <Text className="text-base text-darkGray mt-2 text-center w-[192px]">
-          Login to  manage your {'\n'}restaurant on Custom Dining
+          <Text className="text-base self-center text-darkGray mt-2 text-center ">
+          Lets help you serve the right meals to the {'\n'}right customers.
           </Text>
         </View>
         <ScrollView
@@ -135,7 +149,7 @@ export default function SignupScreen() {
 
           {/* Form Inputs */}
           <TextInput
-            placeholder="First Name"
+            placeholder="Business Name"
             value={firstName}
             onChangeText={setFirstName}
             autoCapitalize="words"
@@ -144,11 +158,12 @@ export default function SignupScreen() {
           />
 
           <TextInput
-            placeholder="Last Name"
-            value={lastName}
-            onChangeText={setLastName}
-            autoCapitalize="words"
-            variant={error && !lastName ? 'error' : 'default'}
+            placeholder="Business Email"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            variant={error && !email ? 'error' : 'default'}
             editable={!isLoading}
           />
 
@@ -180,14 +195,53 @@ export default function SignupScreen() {
           </View>
 
           <TextInput
-            placeholder="Email"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            variant={error && !email ? 'error' : 'default'}
+            placeholder="Business Address"
+            value={lastName}
+            onChangeText={setLastName}
+            autoCapitalize="words"
+            variant={error && !lastName ? 'error' : 'default'}
             editable={!isLoading}
           />
+
+          <View className="mb-4">
+            <View className="border border-gray rounded-lg bg-white">
+              <Picker
+                selectedValue={city}
+                onValueChange={setCity}
+                enabled={!isLoading}
+                style={{ height: 54 }}>
+                <Picker.Item label="Select City" value="" />
+                {cityOptions.map((option) => (
+                  <Picker.Item key={option} label={option} value={option} />
+                ))}
+              </Picker>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            className="flex-row items-center border border-gray rounded-lg px-3 py-4 bg-white mb-1"
+            onPress={async () => {
+              // Clear flag before navigating
+              await AsyncStorage.removeItem('certUploaded');
+              await AsyncStorage.removeItem('certFiles');
+              router.push('/upload-certifications');
+            }}
+            disabled={isLoading}
+          >
+            <Ionicons name="attach" size={20} color={colors.primary} className="mr-2" />
+            <Text className="text-darkGray">
+              {certFiles.length === 2 ? '2 files attached' : certUploaded ? 'Certification uploaded' : 'Upload Certifications'}
+            </Text>
+          </TouchableOpacity>
+          {certFiles.length === 2 && (
+            <View style={{ marginBottom: 12, marginLeft: 8 }}>
+              {certFiles.map((name, idx) => (
+                <Text key={idx} style={{ color: colors.primary, fontSize: 13 }}>
+                  {name}
+                </Text>
+              ))}
+            </View>
+          )}
 
           {/* Password with validation hint */}
           <View className="mb-4">
@@ -232,14 +286,10 @@ export default function SignupScreen() {
               </View>
             </Pressable>
             <View className="flex-1">
-              <Text className="text-darkGray text-sm leading-5">
+              <Text className="text-darkGray text-sm leading-5" >
                 I accept the{' '}
-                <Text className="text-primary font-medium" onPress={handleTermsPress}>
-                  Terms of Use
-                </Text>
-                {' & '}
-                <Text className="text-primary font-medium" onPress={handlePrivacyPress}>
-                  Privacy Policy
+                <Text className="text-primary font-medium" onPress={() => router.push('/terms')}>
+                  Terms of Use & Privacy Policy
                 </Text>
               </Text>
             </View>
@@ -253,42 +303,13 @@ export default function SignupScreen() {
               title={isLoading ? "Creating Account..." : "Create Account"}
               variant="primary"
               onPress={handleSignup}
-              disabled={isLoading}
+              disabled={isLoading || !certUploaded || !firstName || !lastName || !phoneNumber || !email || !password || !confirmPassword || !acceptTerms}
             />
             {isLoading && (
               <View className="flex-row justify-center mt-2">
                 <ActivityIndicator size="small" color={colors.primary} />
               </View>
             )}
-          </View>
-
-          {/* 'Or Create Account Using' Divider */}
-          <View className="flex-row items-center mb-6">
-            <View className="flex-1 h-px bg-gray" />
-            <Text className="mx-4 text-gray">Or Create Account Using</Text>
-            <View className="flex-1 h-px bg-gray" />
-          </View>
-
-          {/* Social Signups */}
-          <View className="flex-row justify-center space-x-6 mb-8">
-            <TouchableOpacity
-              onPress={() => handleSocialSignup('google')}
-              className="p-3 rounded-full"
-              disabled={isLoading}>
-              <Image source={require('../../assets/google.png')} className="w-6 h-6" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => handleSocialSignup('microsoft')}
-              className="p-3 rounded-full"
-              disabled={isLoading}>
-              <Image source={require('../../assets/microsoft.png')} className="w-6 h-6" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => handleSocialSignup('apple')}
-              className="p-3 rounded-full"
-              disabled={isLoading}>
-              <Image source={require('../../assets/apple.png')} className="w-6 h-6" />
-            </TouchableOpacity>
           </View>
 
           {/* Already Have Account & Language Selector */}

@@ -1,16 +1,15 @@
 // Environment configuration
 export const ENV = {
-  DEV: 'https://custom-dining.onrender.com/api',
-  STAGING: 'https://api-staging.example.com/api', 
-  PROD: 'https://api.example.com/api',
+
+  PROD: 'https://custom-dining.onrender.com/api',
 } as const;
 
 // Current environment (change this based on your deployment)
-const CURRENT_ENV: keyof typeof ENV = 'DEV';
+const CURRENT_ENV: keyof typeof ENV = 'PROD';
 
 // API configuration
 export const API_CONFIG = {
-  timeout: 10000, // 10 seconds
+  timeout: 30000,
   defaultHeaders: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -25,20 +24,20 @@ export const ENDPOINTS = {
   logout: '/auth/logout',
   forgotPassword: '/auth/forgot-password',
   resetPassword: '/auth/reset-password',
-  sendOTPMobile: '/auth/send-otp-mobile',
-  sendOTPEmail: '/auth/send-otp-email',
-  verifyOTP: '/auth/verify-otp',
-  refreshToken: '/auth/refresh-token',
+  changePassword: '/auth/change-password',
   verifyEmail: '/auth/verify-email',
+  // sendOTPMobile: '/auth/send-otp-mobile', // Removed - not used
+  // sendOTPEmail: '/auth/send-otp-email', // Removed - not used
+  // verifyOTP: '/auth/verify-otp', // Removed - not used
+  refreshToken: '/auth/refresh-token',
   
   // User
   profile: '/users/profile',
   updateProfile: '/users/profile',
-  changePassword: '/users/change-password',
   
   // App-specific endpoints (add as needed)
   restaurants: '/restaurants',
-  menu: '/menu',
+  meals: '/meals',
   orders: '/orders',
   reservations: '/reservations',
 } as const;

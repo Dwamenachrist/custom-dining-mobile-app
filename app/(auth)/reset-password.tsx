@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView, SafeAreaView, StatusBar, ActivityIndicator, Image } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, SafeAreaView, StatusBar, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Button } from '../../components/Button';
 import { TextInput } from '../../components/TextInput';
@@ -9,82 +9,161 @@ import AuthService from '../../services/authService';
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams();
-  
-  // Extract params
-  const token = params.token as string;
-  const contact = params.contact as string;
-
-  // State management
-  const [newPassword, setNewPassword] = useState('');
+    const { token } = useLocalSearchParams<{ token: string }>();
+    
+    const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+    const [isSuccess, setIsSuccess] = useState(false);
+    const [isTokenValid, setIsTokenValid] = useState(true);
 
   // Validation helpers
-  const isPasswordValid = newPassword.length >= 6;
-  const doPasswordsMatch = newPassword === confirmPassword;
-  const isFormValid = isPasswordValid && doPasswordsMatch && newPassword && confirmPassword;
+    const isPasswordValid = password.length >= 8 && /[!@#$%^&*(),.?":{}|<>]/.test(password);
+    const doPasswordsMatch = password === confirmPassword && password.length > 0;
 
-  // Handle reset password
+    useEffect(() => {
+        if (!token) {
+            setError('Reset token is missing. Please use the link from your email.');
+            setIsTokenValid(false);
+        }
+    }, [token]);
+
   const handleResetPassword = async () => {
     setError('');
     setIsLoading(true);
-    router.replace('/(auth)/reset-password-success');
-
-    // try {
-    //   // Validation
-    //   if (!newPassword || !confirmPassword) {
-    //     setError('Please fill in all fields.');
-    //     return;
-    //   }
-
-    //   if (!isPasswordValid) {
-    //     setError('Password must be at least 6 characters long.');
-    //     return;
-    //   }
-
-    //   if (!doPasswordsMatch) {
-    //     setError('Passwords do not match.');
-    //     return;
-    //   }
-
-    //   console.log('🔑 Resetting password with token:', token);
-
-    //   // Call API service
-    //   const response = await AuthService.resetPassword(token, newPassword);
-
-    //   if (response.success) {
-    //     console.log('✅ Password reset successfully');
         
-    //     // Navigate to success screen or login
-    //     router.replace('/(auth)/reset-password-success');
-    //   } else {
-    //     setError(response.message || 'Failed to reset password. Please try again.');
-    //   }
-    // } catch (error) {
-    //   console.error('❌ Reset password error:', error);
-    //   setError('An unexpected error occurred. Please try again.');
-    // } finally {
-    //   setIsLoading(false);
-    // }
-  };
+        try {
+            // Validation
+            if (!token) {
+                setError('Reset token is missing. Please use the link from your email.');
+                return;
+            }
 
-  const getPasswordStrength = (password: string) => {
-    if (password.length === 0) return { strength: 'none', color: 'gray-300', text: '' };
-    if (password.length < 6) return { strength: 'weak', color: 'red-500', text: 'Weak' };
-    if (password.length < 8) return { strength: 'medium', color: 'yellow-500', text: 'Medium' };
-    if (password.length >= 8 && /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
-      return { strength: 'strong', color: 'green-500', text: 'Strong' };
+            if (!password) {
+                setError('Please enter a new password.');
+                return;
+            }
+
+            if (!isPasswordValid) {
+                setError('Password must be at least 8 characters and contain at least one special character.');
+                return;
+            }
+
+            if (!doPasswordsMatch) {
+                setError('Passwords do not match.');
+                return;
+            }
+
+            console.log('🔑 Resetting password with token:', token);
+
+            // Call reset password API
+            const response = await AuthService.resetPassword(token, password);
+
+            if (response.success) {
+                console.log('✅ Password reset successfully');
+                setIsSuccess(true);
+            } else {
+                setError(response.message || 'Failed to reset password. Please try again.');
+            }
+        } catch (error) {
+            console.error('❌ Reset password error:', error);
+            setError('An unexpected error occurred. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleBackToLogin = () => {
+        router.replace('/(auth)/customer-login');
+    };
+
+    if (!isTokenValid) {
+        return (
+            <SafeAreaView className="flex-1 bg-lightGray">
+                <StatusBar barStyle="dark-content" />
+
+                {/* Header */}
+                <View className="flex-row items-center p-6 pt-12">
+                    <TouchableOpacity onPress={handleBackToLogin} className="mr-4">
+                        <Ionicons name="arrow-back" size={24} color={colors.darkGray} />
+                    </TouchableOpacity>
+                </View>
+
+                <View className="flex-1 px-6 justify-center">
+                    <View className="items-center mb-8">
+                        <View className="w-24 h-24 bg-red-50 rounded-full items-center justify-center mb-6">
+                            <Ionicons name="alert-circle" size={48} color="#DC2626" />
+                        </View>
+                    </View>
+
+                    <View className="mb-8">
+                        <Text className="text-2xl font-bold text-center text-gray-800 mb-4">
+                            Invalid Reset Link
+                        </Text>
+                        <Text className="text-base text-center text-gray-500 leading-6">
+                            The password reset link is invalid or has expired. Please request a new password reset link.
+                        </Text>
+                    </View>
+
+                    <Button
+                        title="Back to Login"
+                        variant="primary"
+                        onPress={handleBackToLogin}
+                    />
+                </View>
+            </SafeAreaView>
+        );
     }
-    return { strength: 'medium', color: 'yellow-500', text: 'Medium' };
-  };
 
-  const passwordStrength = getPasswordStrength(newPassword);
+    if (isSuccess) {
+        return (
+            <SafeAreaView className="flex-1 bg-lightGray">
+                <StatusBar barStyle="dark-content" />
+
+                {/* Header */}
+                <View className="flex-row items-center p-6 pt-12">
+                    <TouchableOpacity onPress={handleBackToLogin} className="mr-4">
+                        <Ionicons name="arrow-back" size={24} color={colors.darkGray} />
+                    </TouchableOpacity>
+                </View>
+
+                <View className="flex-1 px-6 justify-center">
+                    <View className="items-center mb-8">
+                        <View className="w-24 h-24 bg-green-50 rounded-full items-center justify-center mb-6">
+                            <Ionicons name="checkmark-circle" size={48} color="#10B981" />
+                        </View>
+                    </View>
+
+                    <View className="mb-8">
+                        <Text className="text-2xl font-bold text-center text-gray-800 mb-4">
+                            Password Reset Successfully
+                        </Text>
+                        <Text className="text-base text-center text-gray-500 leading-6">
+                            Your password has been updated successfully. You can now log in with your new password.
+                        </Text>
+                    </View>
+
+                    <Button
+                        title="Back to Login"
+                        variant="primary"
+                        onPress={handleBackToLogin}
+                    />
+                </View>
+            </SafeAreaView>
+        );
+    }
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+        <SafeAreaView className="flex-1 bg-lightGray">
       <StatusBar barStyle="dark-content" />
+
+            {/* Header */}
+            <View className="flex-row items-center p-6 pt-12">
+                <TouchableOpacity onPress={handleBackToLogin} className="mr-4">
+                    <Ionicons name="arrow-back" size={24} color={colors.darkGray} />
+                </TouchableOpacity>
+            </View>
 
       <KeyboardAvoidingView
         className="flex-1"
@@ -97,70 +176,70 @@ export default function ResetPasswordScreen() {
           }}
           keyboardShouldPersistTaps="handled">
 
-          {/* Icon and Title */}
-          <View className="items-center mt-[10px] mb-[50px]">
-            <View className="w-20 h-20 mb-[120px] rounded-full items-center justify-center">
-              <Image source={require('../../assets/create-password.png')} className="w-[200px] h-[250px]" />
+                    {/* Illustration */}
+                    <View className="items-center mt-8">
+                        <View className="items-center justify-center mb-4">
+                            <Image
+                                source={require('../../assets/password-reset.png')}
+                                className="w-286 h-286"
+                                resizeMode="contain"
+                            />
+                        </View>
             </View>
-            <Text className="text-2xl font-bold text-center mb-2 text-gray-800">
-              Create New Password
+
+                    {/* Title and Subtitle */}
+                    <View className="mb-12">
+                        <Text className="text-2xl font-bold text-center text-gray-800 mb-2">
+                            Reset Your Password
             </Text>
-            <Text className="text-base text-gray-500 text-center leading-6">
-              Your new password must be different from your previous password.
+                        <Text className="text-base text-center text-gray-500 leading-6">
+                            Enter your new password below
             </Text>
           </View>
 
-          {/* New Password Input */}
-          <View className="mb-4">
+                    {/* Password Input */}
+                    <View className="mb-6">
             <TextInput
-              placeholder="Enter new password"
-              value={newPassword}
-              onChangeText={setNewPassword}
+                            placeholder="New Password"
+                            value={password}
+                            onChangeText={(text) => {
+                                setPassword(text);
+                                if (error) setError(''); // Clear error when user types
+                            }}
               secureTextEntry
-              variant={error && !newPassword ? 'error' : 'default'}
+                            variant={error && !password ? 'error' : 'default'}
               editable={!isLoading}
             />
-            {newPassword && (
-              <View className="mt-2">
-                <View className="flex-row items-center justify-between">
-                  <Text className="text-xs text-gray-500">Password strength:</Text>
-                  <Text className={`text-xs font-medium text-${passwordStrength.color}`}>
-                    {passwordStrength.text}
+                        {password && (
+                            <Text className={`text-xs mt-1 ${isPasswordValid ? 'text-green-600' : 'text-gray-500'}`}>
+                                {isPasswordValid ? '✓ Password meets requirements' : 'Must be at least 8 characters with special character'}
                   </Text>
-                </View>
-                <View className="w-full h-2 bg-gray-200 rounded-full mt-1">
-                  <View 
-                    className={`h-full bg-${passwordStrength.color} rounded-full`}
-                    style={{ 
-                      width: passwordStrength.strength === 'weak' ? '33%' : 
-                             passwordStrength.strength === 'medium' ? '66%' : '100%' 
-                    }}
-                  />
-                </View>
-              </View>
             )}
           </View>
 
           {/* Confirm Password Input */}
           <View className="mb-6">
             <TextInput
-              placeholder="Confirm new password"
+                            placeholder="Confirm New Password"
               value={confirmPassword}
-              onChangeText={setConfirmPassword}
+                            onChangeText={(text) => {
+                                setConfirmPassword(text);
+                                if (error) setError(''); // Clear error when user types
+                            }}
               secureTextEntry
               variant={error && !confirmPassword ? 'error' : 'default'}
               editable={!isLoading}
             />
             {confirmPassword && (
-              <Text className={`text-xs mt-1 ${doPasswordsMatch ? 'text-green-600' : 'text-red-500'}`}>
-                {doPasswordsMatch ? '✓ Passwords match' : '✗ Passwords do not match'}
+                            <Text className={`text-xs mt-1 ${doPasswordsMatch ? 'text-green-600' : 'text-gray-500'}`}>
+                                {doPasswordsMatch ? '✓ Passwords match' : 'Passwords do not match'}
               </Text>
             )}
           </View>
 
           {/* Error Messages */}
           {error ? (
-            <View className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                        <View className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
               <Text className="text-red-600 text-center">{error}</Text>
             </View>
           ) : null}
@@ -168,16 +247,12 @@ export default function ResetPasswordScreen() {
           {/* Reset Password Button */}
           <View className="mb-6">
             <Button
-              title={isLoading ? "Resetting Password..." : "Reset Password"}
+                            title="Reset Password"
               variant="primary"
               onPress={handleResetPassword}
-              disabled={isLoading || !isFormValid}
+                            disabled={isLoading || !password || !confirmPassword || !isPasswordValid || !doPasswordsMatch}
+                            loading={isLoading}
             />
-            {isLoading && (
-              <View className="flex-row justify-center mt-2">
-                <ActivityIndicator size="small" color={colors.primary} />
-              </View>
-            )}
           </View>
 
         </ScrollView>

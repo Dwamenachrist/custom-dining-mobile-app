@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Image, TouchableOpacity, SafeAreaView, StatusBar, Pressable, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useAuth } from '../../auth-context';
 import { Button } from '../../components/Button';
 import { TextInput } from '../../components/TextInput';
 import { Ionicons } from '@expo/vector-icons';
@@ -63,18 +64,18 @@ export default function SignupScreen() {
         phoneNumber: countryCode + phoneNumber,
         password,
         confirmPassword,
-        role: 'user',
       });
 
       if (response.success) {
         console.log('Signup successful:', response.data);
 
-        // Note: Registration doesn't auto-login, so redirect to login
-        // User may need to verify email or login manually
-        setError(''); // Clear any previous errors
+        // Clear any previous errors
+        setError('');
 
-        // Show success message and redirect to login
-        alert('Account created successfully! Please login to continue.');
+        // Show success message and navigate to email verification info
+        alert('Account created successfully! Please check your email to verify your account before logging in.');
+        
+        // Navigate to login screen where user can access the verification flow
         router.push('/(auth)/customer-login');
       } else {
         setError(response.message || 'Signup failed. Please try again.');

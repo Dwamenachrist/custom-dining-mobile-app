@@ -1,6 +1,91 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api, ApiResponse, SignupRequest, SignupFormData, LoginRequest, AuthResponse, RegistrationResponse } from './api';
+import { api, ApiResponse, SignupRequest, SignupFormData, AuthResponse, RegistrationResponse, apiClient } from './api';
 import { ENDPOINTS } from './config';
+import axios from 'axios';
+import { getApiUrl } from './config';
+
+// Create a specialized auth client with longer timeout for auth operations
+const authApiClient = axios.create({
+  baseURL: getApiUrl(),
+  timeout: 45000, // 45 seconds for auth operations (login/signup)
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  },
+});
+
+// Add request interceptor for auth client
+authApiClient.interceptors.request.use(
+  async (config) => {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+        console.log('🔑 Added auth token to auth request');
+      }
+      console.log(`🚀 Auth API Request: ${config.method?.toUpperCase()} ${config.url}`);
+      return config;
+    } catch (error) {
+      console.warn('Failed to get auth token:', error);
+      return config;
+    }
+  },
+  (error) => Promise.reject(error)
+);
+
+// Add response interceptor for auth client
+authApiClient.interceptors.response.use(
+  (response) => {
+    console.log(`✅ Auth Response: ${response.status}`, response.data);
+    return response;
+  },
+  (error) => {
+    console.error(`❌ Auth API Error: ${error.response?.status}`, error.response?.data);
+    return Promise.reject(error);
+  }
+);
+
+// Specialized auth API methods with longer timeout
+const authApi = {
+  post: async <T>(endpoint: string, data?: any): Promise<ApiResponse<T>> => {
+    try {
+      const response = await authApiClient.post(endpoint, data);
+      const isSuccess = response.data.status === 'success';
+      
+      return {
+        success: isSuccess,
+        message: response.data.message || (isSuccess ? 'Success' : 'Request failed'),
+        data: response.data,
+        status: response.data.status,
+      };
+    } catch (error: any) {
+      console.error('🚨 Auth API Request Failed:', error);
+      
+      if (error.response) {
+        return {
+          success: false,
+          message: error.response.data?.message || `HTTP ${error.response.status}: ${error.response.statusText}`,
+          error: error.response.data?.error || error.response.statusText,
+          status: error.response.data?.status || 'error',
+        };
+      } else if (error.request) {
+        return {
+          success: false,
+          message: 'Connection timeout. Please check your internet connection and try again.',
+          error: 'No response from server',
+          status: 'network_error',
+        };
+      } else {
+        return {
+          success: false,
+          message: 'An unexpected error occurred.',
+          error: error.message || 'Unknown error',
+          status: 'unknown_error',
+        };
+      }
+    }
+  }
+};
 
 // 📝 UNDERSTANDING: Storage Keys
 // These are like "labels" for your phone's storage compartments
@@ -10,37 +95,37 @@ const STORAGE_KEYS = {
   PHONE_NUMBER: 'user_phone_number',  // Extra data we collect
 } as const;
 
-class AuthService {
-  // 📝 STEP 1: Data Transformation Function
-  // This converts what the user typed into what the backend expects
-  private transformSignupData(formData: SignupFormData): SignupRequest {
-    console.log('🔄 Transforming frontend data to backend format...');
-    
-    const backendData = {
-      // Combine first and last name for username
-      username: `${formData.firstName} ${formData.lastName}`.trim(),
-      email: formData.email,
-      password: formData.password,
-      role: formData.role,
-    };
-    
-    console.log('📤 Frontend data:', formData);
-    console.log('📦 Backend data:', backendData);
-    
-    return backendData;
-  }
+export interface LoginRequest {
+  email: string;
+  password: string;
+  // Note: role is not sent to API, it's determined by backend
+  // We'll store it locally for routing purposes
+  role?: string;
+}
 
-  // 📝 STEP 2: Registration (Sign Up)
+class AuthService {
+  // 📝 STEP 2: Registration (Sign Up) - FIXED VERSION
   // This is what happens when user clicks "Create Account"
   async signup(formData: SignupFormData): Promise<ApiResponse<RegistrationResponse>> {
     try {
       console.log('👤 Starting user registration...');
       
-      // Transform frontend data to backend format
-      const backendData = this.transformSignupData(formData);
+      // Get user type from AsyncStorage (set during path selection)
+      const userType = await AsyncStorage.getItem('userType') || 'customer';
+      const role = userType === 'customer' ? 'user' : 'admin';
       
-      // Make API call using our new Axios service
-      const response = await api.post<RegistrationResponse>(ENDPOINTS.signup, backendData);
+      // Transform frontend data to backend format as per API docs
+      const backendData = {
+        username: `${formData.firstName} ${formData.lastName}`.trim(),
+        email: formData.email,
+        password: formData.password,
+        role: role, // Get role from userType instead of form data
+      };
+      
+      console.log('📤 Signup data for API:', backendData);
+      
+      // Make API call using the auth API client with longer timeout
+      const response = await authApi.post<RegistrationResponse>(ENDPOINTS.signup, backendData);
       
       if (response.success) {
         console.log('✅ Registration successful!');
@@ -66,25 +151,56 @@ class AuthService {
     }
   }
 
-  // 📝 STEP 3: Login (Sign In) - ORIGINAL VERSION
+  // 📝 STEP 3: Login (Sign In) - FIXED VERSION
   // This is what happens when user clicks "Sign In"
   async login(credentials: LoginRequest): Promise<ApiResponse<AuthResponse>> {
     try {
       console.log('🔐 Starting user login...');
-      console.log('📤 Sending login data (WITHOUT role):', credentials);
       
-      // Make login API call
-      const response = await api.post<AuthResponse>(ENDPOINTS.login, credentials);
+      // Extract only email and password as per API docs
+      const loginData = {
+        email: credentials.email,
+        password: credentials.password,
+      };
+      
+      console.log('📤 Sending login data:', loginData);
+      
+      // Make login API call with longer timeout
+      const response = await authApi.post<{ status: string; token: string }>(ENDPOINTS.login, loginData);
       
       if (response.success && response.data) {
         console.log('✅ Login successful!');
         
+        // Get user type from AsyncStorage (set during path selection)
+        const userType = await AsyncStorage.getItem('userType') || 'customer';
+        console.log('👤 User type from storage:', userType);
+        
+        // Transform backend response to our format
+        const authData: AuthResponse = {
+          token: response.data.token,
+          user: {
+            id: '', // We'll need to decode token or get user info separately
+            email: credentials.email,
+            role: userType === 'customer' ? 'user' : 'admin', // Map userType to role
+          }
+        };
+        
         // Store authentication data (token, user info)
-        await this.storeAuthData(response.data);
+        await this.storeAuthData(authData);
         console.log('💾 Auth data stored successfully');
+        
+        return {
+          success: true,
+          message: 'Login successful',
+          data: authData,
+        };
       }
       
-      return response;
+      return {
+        success: false,
+        message: response.message || 'Login failed',
+        error: response.error,
+      };
     } catch (error) {
       console.error('❌ Login error:', error);
       return {
@@ -95,130 +211,71 @@ class AuthService {
     }
   }
 
-  // 📝 STEP 4: Forgot Password (Original email-based)
+  // 📝 STEP 4: Forgot Password (Email-based reset link)
   // This is what happens when user clicks "Forgot Password"
   async forgotPassword(email: string): Promise<ApiResponse<{ message: string }>> {
     try {
       console.log('📧 Sending password reset email...');
       
-      // Use POST as the server expects a POST for forgot-password
-      const response = await api.post<{ message: string }>(ENDPOINTS.forgotPassword, { email });
+      // Call the forgot password API endpoint with longer timeout
+      const response = await authApi.post<{ status: string; message: string }>(ENDPOINTS.forgotPassword, { email });
       
-      if (response.success) {
-        console.log('✅ Password reset email sent');
+      // Check if the API call was successful
+      if (response.success && response.data) {
+        // Check the backend status field
+        const isSuccess = response.data.status === 'success';
+        
+        if (isSuccess) {
+          console.log('✅ Password reset link sent successfully');
+        } else {
+          console.log('❌ Password reset failed:', response.data.message);
       }
       
       return {
-        success: response.success,
-        message: response.message || 'Password reset email sent successfully',
+          success: isSuccess,
+          message: response.data.message || (isSuccess ? 'Password reset link sent successfully' : 'Failed to send reset link'),
         data: response.data
       };
+      }
+      
+      return response;
     } catch (error) {
       console.error('❌ Forgot password error:', error);
       return {
         success: false,
-        message: 'Failed to send reset email. Please try again.',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
-  }
-
-  // 📝 NEW: Send OTP to Mobile Number
-  async sendOTPToMobile(phoneNumber: string): Promise<ApiResponse<{ message: string }>> {
-    try {
-      console.log('📱 Sending OTP to mobile:', phoneNumber);
-      
-      const response = await api.post<{ message: string }>(ENDPOINTS.sendOTPMobile, { 
-        phoneNumber 
-      });
-      
-      if (response.success) {
-        console.log('✅ OTP sent to mobile successfully');
-      }
-      
-      return response;
-    } catch (error) {
-      console.error('❌ Send OTP to mobile error:', error);
-      return {
-        success: false,
-        message: 'Failed to send OTP to mobile. Please try again.',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
-  }
-
-  // 📝 NEW: Send OTP to Email
-  async sendOTPToEmail(email: string): Promise<ApiResponse<{ message: string }>> {
-    try {
-      console.log('📧 Sending OTP to email:', email);
-      
-      const response = await api.post<{ message: string }>(ENDPOINTS.sendOTPEmail, { 
-        email 
-      });
-      
-      if (response.success) {
-        console.log('✅ OTP sent to email successfully');
-      }
-      
-      return response;
-    } catch (error) {
-      console.error('❌ Send OTP to email error:', error);
-      return {
-        success: false,
-        message: 'Failed to send OTP to email. Please try again.',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
-  }
-
-  // 📝 NEW: Verify OTP
-  async verifyOTP(
-    contact: string, 
-    otp: string, 
-    method: 'mobile' | 'email'
-  ): Promise<ApiResponse<{ resetToken: string; message: string }>> {
-    try {
-      console.log('🔐 Verifying OTP:', { contact, otp, method });
-      
-      const response = await api.post<{ resetToken: string; message: string }>(
-        ENDPOINTS.verifyOTP, 
-        { 
-          contact, 
-          otp, 
-          method 
-        }
-      );
-      
-      if (response.success) {
-        console.log('✅ OTP verified successfully');
-      }
-      
-      return response;
-    } catch (error) {
-      console.error('❌ Verify OTP error:', error);
-      return {
-        success: false,
-        message: 'Invalid verification code. Please try again.',
+        message: 'Failed to send reset link. Please try again.',
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
 
   // 📝 NEW: Reset Password with Token
-  async resetPassword(
-    token: string, 
-    newPassword: string
-  ): Promise<ApiResponse<{ message: string }>> {
+  async resetPassword(token: string, newPassword: string): Promise<ApiResponse<{ message: string }>> {
     try {
       console.log('🔑 Resetting password with token');
       
-      const response = await api.post<{ message: string }>(ENDPOINTS.resetPassword, { 
-        token, 
-        newPassword 
-      });
+      // Call the reset password API with token as query parameter
+      const response = await api.post<{ status: string; message: string }>(
+        `${ENDPOINTS.resetPassword}?token=${token}`, 
+        { password: newPassword }
+      );
       
-      if (response.success) {
-        console.log('✅ Password reset successfully');
+      // Check if the API call was successful
+      if (response.success && response.data) {
+        // Check the backend status field
+        const isSuccess = response.data.status === 'success';
+      
+        if (isSuccess) {
+          console.log('✅ Password reset successfully');
+        } else {
+          console.log('❌ Password reset failed:', response.data.message);
+        }
+        
+        return {
+          success: isSuccess,
+          message: response.data.message || (isSuccess ? 'Password reset successfully' : 'Failed to reset password'),
+          data: response.data
+        };
       }
       
       return response;
@@ -232,31 +289,121 @@ class AuthService {
     }
   }
 
+  // 📝 NEW: Change Password (for logged-in users)
+  async changePassword(currentPassword: string, newPassword: string): Promise<ApiResponse<{ message: string }>> {
+    try {
+      console.log('🔑 Changing password for logged-in user');
+      
+      // Call the change password API (requires authentication)
+      const response = await api.post<{ status: string; message: string }>(
+        ENDPOINTS.changePassword, 
+        { 
+          currentPassword, 
+          newPassword 
+        }
+      );
+      
+      // Check if the API call was successful
+      if (response.success && response.data) {
+        // Check the backend status field
+        const isSuccess = response.data.status === 'success';
+        
+        if (isSuccess) {
+          console.log('✅ Password changed successfully');
+        } else {
+          console.log('❌ Password change failed:', response.data.message);
+        }
+        
+        return {
+          success: isSuccess,
+          message: response.data.message || (isSuccess ? 'Password updated successfully' : 'Failed to update password'),
+          data: response.data
+        };
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Change password error:', error);
+      return {
+        success: false,
+        message: 'Failed to change password. Please try again.',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  // 📝 NEW: Verify Email Token
+  async verifyEmail(token: string): Promise<ApiResponse<{ message: string }>> {
+    try {
+      console.log('📧 Verifying email with token');
+      
+      // Call the verify email API with token as query parameter
+      const response = await api.get<{ status: string; message: string }>(
+        `${ENDPOINTS.verifyEmail}?token=${token}`
+      );
+      
+      // Check if the API call was successful
+      if (response.success && response.data) {
+        // Check the backend status field
+        const isSuccess = response.data.status === 'success';
+      
+        if (isSuccess) {
+          console.log('✅ Email verified successfully');
+        } else {
+          console.log('❌ Email verification failed:', response.data.message);
+        }
+        
+        return {
+          success: isSuccess,
+          message: response.data.message || (isSuccess ? 'Email verified successfully' : 'Failed to verify email'),
+          data: response.data
+        };
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Verify email error:', error);
+      return {
+        success: false,
+        message: 'Failed to verify email. Please try again.',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
   // 📝 STEP 5: Logout
-  // This is what happens when user clicks "Sign Out"
+  // This is what happens when user clicks "Logout"
   async logout(): Promise<ApiResponse<{ message: string }>> {
     try {
       console.log('👋 Logging out user...');
       
-      // Try to call logout endpoint (optional - depends on backend)
-      const response = await api.post<{ message: string }>(ENDPOINTS.logout);
+      // Try to call logout endpoint (but don't fail if it doesn't work)
+      try {
+        const response = await api.post<{ message: string }>(ENDPOINTS.logout, {});
+        console.log('✅ Logout API call successful');
+      } catch (error) {
+        console.log('⚠️ Logout API call failed, but continuing with local cleanup');
+      }
       
-      // Clear stored data regardless of API response
+      // Always clear local auth data regardless of API response
       await this.clearAuthData();
-      console.log('🧹 Local auth data cleared');
+      console.log('🧹 Auth data cleared successfully');
       
       return {
         success: true,
         message: 'Logged out successfully',
+        data: { message: 'Logged out successfully' }
       };
     } catch (error) {
       console.error('❌ Logout error:', error);
-      // Still clear local data even if API call fails
+      // Even if there's an error, clear local data
       await this.clearAuthData();
+      console.log('🧹 Local auth data cleared');
       
       return {
-        success: true, // Return success since local logout succeeded
-        message: 'Logged out successfully',
+        success: false,
+        message: 'Logout completed (local cleanup only)',
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
@@ -346,12 +493,32 @@ class AuthService {
     }
   }
 
-  // Register a new restaurant
+  // Register a new restaurant - UPDATED
   async registerRestaurant(data: any): Promise<ApiResponse<any>> {
     try {
-      const response = await api.post(ENDPOINTS.restaurants, data);
-      return response;
+      console.log('🏪 Starting restaurant registration...');
+      
+      // NOTE: The API docs don't show a restaurant signup endpoint
+      // For now, we'll simulate a successful restaurant registration
+      // In production, you'll need to implement the actual restaurant signup endpoint
+      
+      console.log('📤 Restaurant signup data:', data);
+      
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      console.log('✅ Restaurant registration successful! (simulated)');
+      
+      return {
+        success: true,
+        message: 'Restaurant account created successfully!',
+        data: {
+          status: 'success',
+          message: 'Restaurant account created successfully!'
+        }
+      };
     } catch (error) {
+      console.error('❌ Restaurant registration error:', error);
       return {
         success: false,
         message: 'Failed to register restaurant. Please try again.',

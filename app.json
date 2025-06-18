@@ -11,6 +11,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-splash-screen",
       [
         "expo-dev-launcher",
         {
@@ -23,17 +24,12 @@
       "tsconfigPaths": true
     },
     "orientation": "portrait",
-        "icon": "./assets/custom-dining-splash.png",
-    "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash-light.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#F5F5F0",
-      "dark": {
-        "image": "./assets/splash-dark.png",
-        "resizeMode": "contain", 
-        "backgroundColor": "#2F7356"
-      }
+      "resizeMode": "cover",
+      "backgroundColor": "#F5F5F0"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -43,14 +39,34 @@
       "bundleIdentifier": "com.kwasiagyapong.customdiningapp",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "splash": {
+        "image": "./assets/splash-light.png",
+        "resizeMode": "cover",
+        "backgroundColor": "#F5F5F0",
+                "dark": {
+          "image": "./assets/splash-dark.png",
+          "resizeMode": "cover", 
+          "backgroundColor": "#2F7356"
+        }
+      },
+      "package": "com.kwasiagyapong.customdiningapp"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/custom-dining-splash.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F5F5F0"
       },
-      "package": "com.kwasiagyapong.customdiningapp"
+      "splash": {
+        "image": "./assets/splash-light.png",
+        "resizeMode": "cover",
+        "backgroundColor": "#F5F5F0",
+        "dark": {
+          "image": "./assets/splash-dark.png",
+          "resizeMode": "cover", 
+          "backgroundColor": "#2F7356"
+        }
+      }
     },
     "extra": {
       "router": {},

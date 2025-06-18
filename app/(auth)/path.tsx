@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet, Touchable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors } from '../../theme/colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function PathScreen() {
   const [selected, setSelected] = useState<'customer' | 'restaurant' | null>(null);
@@ -13,8 +14,17 @@ interface HandleSelection {
     (type: 'customer' | 'restaurant'): void;
 }
 
-const handleSelection: HandleSelection = (type) => {
+const handleSelection: HandleSelection = async (type) => {
     setSelected(type);
+    
+    // Store user type in AsyncStorage
+    try {
+        await AsyncStorage.setItem('userType', type);
+        console.log('User type stored:', type);
+    } catch (error) {
+        console.error('Error storing user type:', error);
+    }
+    
     // Navigate to the respective screen
     if (type === 'customer') {
         router.push('/(auth)/customer-onboard' as any);

@@ -78,8 +78,8 @@ export default function LoginScreen() {
         console.log('🗑️ Email removed from saved data');
       }
 
-      // Always login as user
-      const response = await AuthService.login({ email, password, role: 'admin' });
+      // Login without role - API determines user type
+      const response = await AuthService.login({ email, password });
 
       if (response.success) {
         setIsLoggedIn(true);
@@ -198,44 +198,44 @@ export default function LoginScreen() {
           {/* Social Logins */}
           <View className="flex-row justify-center space-x-6">
             <TouchableOpacity 
-              onPress={() => handleSocialLogin('google')} 
-              className="p-3 rounded-full"
+              className="w-12 h-12 bg-white rounded-full border border-gray items-center justify-center"
+              onPress={() => handleSocialLogin('google')}
               disabled={isLoading}>
               <Image source={require('../../assets/google.png')} className="w-6 h-6" />
             </TouchableOpacity>
             <TouchableOpacity 
-              onPress={() => handleSocialLogin('microsoft')} 
-              className="p-3 rounded-full"
+              className="w-12 h-12 bg-white rounded-full border border-gray items-center justify-center"
+              onPress={() => handleSocialLogin('microsoft')}
               disabled={isLoading}>
               <Image source={require('../../assets/microsoft.png')} className="w-6 h-6" />
             </TouchableOpacity>
             <TouchableOpacity 
-              onPress={() => handleSocialLogin('apple')} 
-              className="p-3 rounded-full"
+              className="w-12 h-12 bg-white rounded-full border border-gray items-center justify-center"
+              onPress={() => handleSocialLogin('apple')}
               disabled={isLoading}>
               <Image source={require('../../assets/apple.png')} className="w-6 h-6" />
             </TouchableOpacity>
           </View>
 
-          {/* Create Account & Language Selector */}
-          <View className="mt-12">
-            <View className="flex-row justify-center mb-6">
-              <Text className="text-darkGray">New User? </Text>
-              <TouchableOpacity 
-                onPress={() => router.push('/(auth)/restaurant-signup')}
-                disabled={isLoading}>
-                <Text className="font-bold text-primary">Create an Account!</Text>
-              </TouchableOpacity>
-            </View>
+          {/* Language Selector */}
+          <View className="flex-row justify-center mt-8">
             <TouchableOpacity 
-              onPress={handleLanguageChange} 
-              className="flex-row self-center items-center"
+              className="flex-row items-center"
+              onPress={handleLanguageChange}
               disabled={isLoading}>
-                <Text className="text-darkGray">English</Text>
-                <Ionicons name="chevron-down" size={16} color={colors.darkGray} />
+              <Ionicons name="language-outline" size={20} color={colors.gray} />
+              <Text className="text-gray ml-1">English</Text>
+              <Ionicons name="chevron-down-outline" size={16} color={colors.gray} />
             </TouchableOpacity>
           </View>
 
+          {/* Sign Up Link */}
+          <View className="flex-row justify-center mt-8">
+            <Text className="text-darkGray">Don't have an account? </Text>
+            <TouchableOpacity onPress={() => router.push('/(auth)/restaurant-signup')} disabled={isLoading}>
+              <Text className="font-semibold text-primary">Sign Up</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet, ScrollView } from 'react-native';
-import { Button } from '../components/Button';
-import { colors } from '../theme/colors';
+import { Button } from '../../components/Button';
+import { colors } from '../../theme/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { TextInput } from '~/components/TextInput';
 import { useRouter } from 'expo-router';

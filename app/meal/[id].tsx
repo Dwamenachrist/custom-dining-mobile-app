@@ -1,25 +1,24 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, StatusBar, SafeAreaView } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 const MEALS = [
   {
     id: 1,
-    title: 'Avocado Veggie Bowl',
-    image: require('../../assets/recommendation1.png'),
-    highlight: 'Avocado',
-    description: "Tender grilled chicken paired with fresh vegetables and creamy avocado, creating a nutritious and delicious combination that's both satisfying and filling.",
+    title: 'Fruity Oats delight',
+    image: require('../../assets/breakfast.png'),
+    description: "A nourishing bowl of rolled oats topped with fresh bananas, blueberries, and seeds. Served warm with almond milk. Perfect for starting your day right—no added sugar, just natural sweetness.",
     tags: ['Low-Carb', 'Sugar-Free', 'High Fiber', 'Vegan'],
     price: 5000,
     available: true,
     nutrition: [
-      { label: 'Calories', value: '350 kcal' },
-      { label: 'Total Carbohydrates', value: '10 g' },
-      { label: 'Protein', value: '35 g' },
-      { label: 'Fiber', value: '10 g' },
-      { label: 'Fats', value: '15 g' },
-      { label: 'Potassium', value: '90 mg' },
+      { label: 'Calories', value: '310 kcal' },
+      { label: 'Total Carbohydrates', value: '38 g' },
+      { label: 'Sugars (Natural)', value: '10 g' },
+      { label: 'Fiber', value: '6 g' },
+      { label: 'Fats', value: '8 g' },
+      { label: 'Sodium', value: '90 mg' },
     ],
   },
   // Add more meals as needed
@@ -38,62 +37,75 @@ export default function MealDetail() {
   }
 
   const handleOrderNow = () => {
-    console.log('Order Now');
-    router.push('/cart');
+    router.push('/checkout');
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 32 }}>
-      <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back" size={24} color="#222" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Meal Detail</Text>
-        <View style={{ width: 24 }} />
-      </View>
-      <Image source={meal.image} style={styles.mealImage} />
-      <Text style={styles.mealTitle}>
-        <Text style={{ color: '#3A7752', fontWeight: '700' }}>{meal.highlight}</Text>
-        <Text> {meal.title.replace(meal.highlight, '')}</Text>
-      </Text>
-      <Text style={styles.sectionLabel}>Description</Text>
-      <Text style={styles.description}>{meal.description}</Text>
-      <View style={styles.tagRow}>
-        {meal.tags.map((tag) => (
-          <View key={tag} style={styles.tag}>
-            <Text style={styles.tagText}>{tag}</Text>
-          </View>
-        ))}
-      </View>
-      <View style={styles.priceRow}>
-        <Text style={styles.price}>#5,000</Text>
-        <Text style={styles.available}>{meal.available ? 'Available' : 'Unavailable'}</Text>
-      </View>
-      <Text style={styles.sectionLabel}>Nutrition Info</Text>
-      <View style={styles.nutritionCard}>
-        {meal.nutrition.map((item) => (
-          <View key={item.label} style={styles.nutritionRow}>
-            <Text style={styles.nutritionLabel}>{item.label}</Text>
-            <Text style={styles.nutritionValue}>{item.value}</Text>
-          </View>
-        ))}
-      </View>
-      <View style={styles.buttonRow}>
-        <TouchableOpacity style={styles.addButton}>
-          <Text style={styles.addButtonText}>Add to Plan</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.orderButton}>
-          <Text style={styles.orderButtonText} onPress={ handleOrderNow}>Order Now</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#f7f5f0" />
+      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 32 }}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <MaterialIcons name="arrow-back" size={24} color="#222" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Meal Detail</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        
+        <View style={styles.imageContainer}>
+          <Image source={meal.image} style={styles.mealImage} resizeMode="cover" />
+        </View>
+
+        <Text style={styles.mealTitle}>{meal.title}</Text>
+        
+        <Text style={styles.sectionLabel}>Description</Text>
+        <Text style={styles.description}>{meal.description}</Text>
+        
+        <View style={styles.tagRow}>
+          {meal.tags.map((tag) => (
+            <View key={tag} style={styles.tag}>
+              <Text style={styles.tagText}>{tag}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.priceRow}>
+          <Text style={styles.price}>#{meal.price.toLocaleString()}</Text>
+          <Text style={styles.available}>{meal.available ? 'Available' : 'Unavailable'}</Text>
+        </View>
+
+        <Text style={styles.sectionLabel}>Nutrition Info</Text>
+        <View style={styles.nutritionCard}>
+          {meal.nutrition.map((item) => (
+            <View key={item.label} style={styles.nutritionRow}>
+              <Text style={styles.nutritionLabel}>{item.label}</Text>
+              <Text style={styles.nutritionValue}>{item.value}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.buttonRow}>
+          <TouchableOpacity style={styles.addButton}>
+            <Text style={styles.addButtonText}>Add to Plan</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.orderButton} onPress={handleOrderNow}>
+            <Text style={styles.orderButtonText}>Order Now</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f7f5f0',
+    marginTop: 20,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#F7F5F0',
+    backgroundColor: '#f7f5f0',
     paddingHorizontal: 16,
   },
   centered: {
@@ -105,126 +117,124 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 16,
+    marginTop: 48,
     marginBottom: 16,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '600',
     color: '#222',
+  },
+  imageContainer: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
   },
   mealImage: {
     width: '100%',
-    height: 180,
-    borderRadius: 16,
-    marginBottom: 18,
-    backgroundColor: '#C7D7C9',
+    height: '100%',
   },
   mealTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 8,
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 16,
     color: '#222',
   },
   sectionLabel: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: '#222',
-    marginTop: 8,
-    marginBottom: 4,
+    marginBottom: 8,
   },
   description: {
-    color: '#444',
+    color: '#666',
     fontSize: 14,
-    marginBottom: 10,
+    lineHeight: 20,
+    marginBottom: 16,
   },
   tagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 10,
+    marginBottom: 16,
   },
   tag: {
-    backgroundColor: '#3A7752',
-    borderRadius: 8,
-    paddingHorizontal: 10,
+    backgroundColor: '#E8F5E9',
+    borderRadius: 4,
+    paddingHorizontal: 12,
     paddingVertical: 4,
-    marginRight: 8,
-    marginBottom: 6,
   },
   tagText: {
-    color: '#fff',
-    fontSize: 13,
+    color: '#2E7D32',
+    fontSize: 12,
     fontWeight: '500',
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 16,
     gap: 12,
   },
   price: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '600',
     color: '#222',
-    marginRight: 10,
   },
   available: {
-    color: '#3A7752',
-    fontWeight: '600',
+    color: '#2E7D32',
     fontSize: 14,
   },
   nutritionCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 18,
-    marginTop: 6,
+    borderRadius: 8,
+    marginTop: 8,
+    marginBottom: 24,
   },
   nutritionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
   },
   nutritionLabel: {
     color: '#444',
-    fontSize: 15,
+    fontSize: 14,
   },
   nutritionValue: {
     color: '#222',
-    fontWeight: '600',
-    fontSize: 15,
+    fontSize: 14,
   },
   buttonRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 16,
-    marginTop: 8,
+    gap: 12,
   },
   addButton: {
     flex: 1,
-    backgroundColor: '#3A7752',
+    backgroundColor: '#2E7D32',
     borderRadius: 8,
     paddingVertical: 14,
     alignItems: 'center',
-    marginRight: 8,
   },
   addButtonText: {
     color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
+    fontWeight: '600',
+    fontSize: 14,
   },
   orderButton: {
     flex: 1,
-    backgroundColor: '#FFD600',
+    backgroundColor: '#FDD835',
     borderRadius: 8,
     paddingVertical: 14,
     alignItems: 'center',
-    marginLeft: 8,
   },
   orderButtonText: {
     color: '#222',
-    fontWeight: '700',
-    fontSize: 16,
+    fontWeight: '600',
+    fontSize: 14,
   },
 }); 

@@ -26,6 +26,24 @@ export interface User {
   createdAt?: string;
 }
 
+// Meal types - matching backend structure
+export interface Meal {
+  id: number;
+  name: string;
+  description: string;
+  dietaryTags: string[];
+  nutritionalInfo: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+  allergens: string[];
+  restaurantId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Updated to match backend requirements
 export interface SignupRequest {
   username: string;     // Backend uses "username"
@@ -42,13 +60,15 @@ export interface SignupFormData {
   phoneNumber: string;
   password: string;
   confirmPassword: string;
-  role: string;
+  // role: string; // Removed - role is determined from userType in AsyncStorage
 }
 
 export interface LoginRequest {
   email: string;
   password: string;
-  role: string;
+  // Note: role is not sent to API, it's determined by backend
+  // We'll store it locally for routing purposes
+  role?: string;
 }
 
 // Backend registration response (based on docs)
@@ -137,11 +157,11 @@ class ApiService {
     try {
       const response = await apiClient.get(endpoint);
       
+      // Backend returns data directly (like arrays for /meals), not wrapped
       return {
         success: true,
-        message: response.data.message || 'Success',
-        data: response.data.data || response.data,
-        status: response.data.status,
+        message: 'Success',
+        data: response.data, // Use response.data directly
       };
     } catch (error) {
       return this.handleError(error);
@@ -153,10 +173,13 @@ class ApiService {
     try {
       const response = await apiClient.post(endpoint, data);
       
+      // Handle backend response format: { status: "success", token: "...", message: "..." }
+      const isSuccess = response.data.status === 'success';
+      
       return {
-        success: response.data.status === 'success' || response.status < 400,
-        message: response.data.message || 'Success',
-        data: response.data.data || response.data,
+        success: isSuccess,
+        message: response.data.message || (isSuccess ? 'Success' : 'Request failed'),
+        data: response.data, // Return the full response data
         status: response.data.status,
       };
     } catch (error) {
@@ -242,4 +265,63 @@ export const api = {
 
 // Export the Axios instance in case you need advanced features
 export { apiClient };
+
+// Restaurant-specific API functions
+export async function addMealToRestaurant(data: {
+  restaurantId: string;
+  jwt: string;
+  name: string;
+  description: string;
+  price: number;
+  dietaryTags: string[];
+  category?: string;
+  nutrition?: any;
+  days?: string[];
+  timeSlot?: string;
+  image?: string;
+}): Promise<ApiResponse<any>> {
+  try {
+    const { restaurantId, jwt, ...mealData } = data;
+    
+    // Only send required fields to backend as per API docs
+    const payload = {
+      name: mealData.name,
+      description: mealData.description,
+      price: mealData.price,
+      dietaryTags: mealData.dietaryTags,
+    };
+
+    console.log('🍽️ Adding meal to restaurant:', restaurantId, payload);
+    
+    const response = await api.post('/meals', payload);
+    
+    if (response.success) {
+      console.log('✅ Meal added successfully!');
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('❌ Add meal error:', error);
+    throw error;
+  }
+}
+
+// Get all meals for menu snapshot
+export async function getAllMeals(): Promise<ApiResponse<Meal[]>> {
+  try {
+    console.log('🍽️ Fetching all meals for menu snapshot');
+    
+    const response = await api.get<Meal[]>('/meals');
+    
+    if (response.success) {
+      console.log('✅ Meals fetched successfully!');
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('❌ Get meals error:', error);
+    throw error;
+  }
+}
+
 export default ApiService; 

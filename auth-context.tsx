@@ -3,10 +3,21 @@ import { createContext, useContext, useState, ReactNode, useEffect } from 'react
 // You might use AsyncStorage for persistence in a real app
 // import AsyncStorage from '@react-native-async-storage/async-storage';
 
+interface User {
+  id: string;
+  email: string;
+  role: string;
+  restaurantId?: string;
+}
+
 interface AuthContextType {
   isLoggedIn: boolean;
   isLoading: boolean; // This is essential for the router
+  user: User | null;
+  jwt: string | null;
   setIsLoggedIn: (value: boolean) => void;
+  setUser: (user: User | null) => void;
+  setJwt: (jwt: string | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -14,6 +25,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true); // Start in a loading state
+  const [user, setUser] = useState<User | null>(null);
+  const [jwt, setJwt] = useState<string | null>(null);
 
   // This effect runs on app startup to check for a saved session.
   useEffect(() => {
@@ -35,7 +48,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
   return (
-    <AuthContext.Provider value={{ isLoggedIn, isLoading, setIsLoggedIn }}>
+    <AuthContext.Provider value={{ 
+      isLoggedIn, 
+      isLoading, 
+      user, 
+      jwt, 
+      setIsLoggedIn, 
+      setUser, 
+      setJwt 
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -46,3 +67,6 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
   return ctx;
 }
+
+// Export AuthContext for direct use
+export { AuthContext };

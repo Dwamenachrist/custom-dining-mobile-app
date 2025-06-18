@@ -1,5 +1,5 @@
 import { forwardRef } from 'react';
-import { Text, TouchableOpacity, TouchableOpacityProps, View, StyleSheet } from 'react-native';
+import { Text, TouchableOpacity, TouchableOpacityProps, View, StyleSheet, ActivityIndicator } from 'react-native';
 import { colors } from '../theme/colors';
 
 // Button variants based on the design system
@@ -9,9 +9,9 @@ const VARIANT_CLASSES = {
   accent: 'bg-accent',
   warning: 'bg-warning',
   error: 'bg-error',
-  outline: 'border border-primary bg-white',
-  outlineError: 'border border-error bg-white',
-  outlineGray: 'border border-gray bg-white',
+  outline: 'border-2 border-primary bg-white',
+  outlineError: 'border-2 border-error bg-white',
+  outlineGray: 'border-2 border-gray bg-white',
   dark: 'bg-black',
 };
 
@@ -30,23 +30,64 @@ const VARIANT_TEXT_CLASSES = {
 type ButtonProps = {
   title: string;
   variant?: keyof typeof VARIANT_CLASSES;
+  loading?: boolean;
 } & TouchableOpacityProps;
 
 export const Button = forwardRef<View, ButtonProps>(
-  ({ title, variant = 'primary', style, className = '', ...touchableProps }, ref) => {
+  ({ 
+    title, 
+    variant = 'primary', 
+    style, 
+    className = '', 
+    disabled, 
+    loading = false,
+    ...touchableProps 
+  }, ref) => {
+    
+    // If disabled or loading, override styles to gray
+    const isDisabled = disabled || loading;
+    const buttonClass = isDisabled
+      ? 'bg-gray-300'
+      : VARIANT_CLASSES[variant] + '';
+    const textClass = isDisabled
+      ? 'text-gray-500'
+      : VARIANT_TEXT_CLASSES[variant];
+
     return (
       <TouchableOpacity
         ref={ref}
         {...touchableProps}
-        style={[styles.button, style]}
-        className={`${VARIANT_CLASSES[variant]} rounded-[28px] shadow-md p-4 ${className}`}
+        disabled={isDisabled}
+        style={[
+          styles.button, 
+          isDisabled && { backgroundColor: colors.gray }, 
+          style
+        ]}
+        className={`
+          ${buttonClass} 
+          rounded-xl 
+          shadow-sm 
+          p-4 
+          ${className}
+          ${isDisabled ? 'opacity-60' : 'active:opacity-80'}
+        `}
+        activeOpacity={0.8}
       >
+        <View className="flex-row items-center justify-center">
+          {loading && (
+            <ActivityIndicator 
+              size="small" 
+              color={isDisabled ? colors.gray : (variant === 'outline' ? colors.primary : 'white')} 
+              className="mr-2"
+            />
+          )}
         <Text
-          className={`text-lg font-semibold text-center ${VARIANT_TEXT_CLASSES[variant]}`}
-          style={styles.buttonText}
+            className={`font-semibold text-center ${textClass}`}
+            style={styles.buttonText}
         >
-          {title}
+            {loading ? 'Loading...' : title}
         </Text>
+        </View>
       </TouchableOpacity>
     );
   }
@@ -56,16 +97,15 @@ Button.displayName = 'Button';
 
 const styles = StyleSheet.create({
   button: {
-    borderRadius: 5,
-    padding: 16,
+    borderRadius: 12,
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
   },
   buttonText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
   },

@@ -1,115 +1,149 @@
-import { router } from 'expo-router';
-import {View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Pressable} from 'react-native';
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Pressable, ActivityIndicator } from 'react-native';
+import { colors } from '../theme/colors';
 
+interface Meal {
+  id: string;
+  name: string;
+  description: string;
+  image: any;
+  price: number;
+  calories: number;
+  tags: string[];
+  restaurant: {
+    id: string;
+    name: string;
+  };
+}
 
-const recommendedMeals = [
-  {
-    id: 1,
-    title: 'Avocado Veggie Bowl',
-    image: require('../assets/recommendation1.png') ,
-    tags: ['Low-Carb', ' Sugar-Free'],
-  },
-  {
-    id: 2,
-    title: 'Caesar Salad',
-    image: require('../assets/recommendation2.png') ,
-    tags: ['Low-Carb', 'Plant-Based'],
-  },
-  {
-    id: 3,
-    title: 'Stir Fry Tofu Rice',
-    image: require('../assets/recommendation3.png') ,
-    tags: ['Low-Carb', 'Sugar-Free']
-  },
-];
+interface MealCardProps {
+  meals: Meal[];
+  onMealPress: (meal: Meal) => void;
+  onAddToPlan: (meal: Meal) => void;
+  isLoading: boolean;
+}
 
- const handleCardPress = (meal: { id : number}) => {
-  router.push(`/meal/${meal.id}` as any);
-};
+export default function MealCard({ meals, onMealPress, onAddToPlan, isLoading }: MealCardProps) {
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
-
-export default function RecommendedMeals() {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      {recommendedMeals.map((meal) => (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContainer}>
+      {meals.map((meal) => (
         <TouchableOpacity
           key={meal.id}
-          
-          onPress={() => handleCardPress(meal)}
-            style={styles.card}>
-              <View style={styles.cardContent}>
+          onPress={() => onMealPress(meal)}
+          style={styles.card}
+        >
+          <View style={styles.cardContent}>
             <View style={styles.leftSection}>
-              <Text style={styles.title}>{meal.title}</Text>
+              <Text style={styles.title} numberOfLines={2}>{meal.name}</Text>
               <View style={styles.tagRow}>
-                {meal.tags.map((tag, index) => (
-                  <Text key={index} style={styles.tag}>{tag}</Text>
+                {meal.tags.slice(0, 2).map((tag, index) => (
+                  <View key={index} style={styles.tagContainer}>
+                    <Text style={styles.tag}>{tag}</Text>
+                  </View>
                 ))}
               </View>
-              <Pressable style={styles.addButton}>
+              <Pressable 
+                style={styles.addButton}
+                onPress={() => onAddToPlan(meal)}
+              >
                 <Text style={styles.addButtonText}>Add to Plan</Text>
               </Pressable>
             </View>
-            <Image source={meal.image} style={styles.image} />
+            <View style={styles.imageContainer}>
+              <Image source={meal.image} style={styles.image} />
+            </View>
           </View>
         </TouchableOpacity>
       ))}
     </ScrollView>
   );
 }
+
 const styles = StyleSheet.create({
+  loadingContainer: {
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scrollContainer: {
+    paddingRight: 16,
+  },
   card: {
     backgroundColor: '#DCF0DE',
     borderRadius: 16,
-    padding: 10,
+    padding: 14,
     marginRight: 16,
-    width: 280,
+    width: 300,
     height: 120,
     justifyContent: 'center',
   },
   cardContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    flex: 1,
   },
   leftSection: {
     flex: 1,
     justifyContent: 'space-between',
-    gap: 6,
+    height: '100%',
+    paddingRight: 12,
   },
   title: {
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 16,
     color: '#1A1A1A',
+    marginBottom: 6,
+    lineHeight: 20,
   },
   tagRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
     flexWrap: 'wrap',
+    marginBottom: 8,
+    alignItems: 'center',
   },
-  tag: {
+  tagContainer: {
     backgroundColor: '#2E7D32',
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    fontSize: 12,
+  },
+  tag: {
+    fontSize: 11,
     color: '#fff',
+    fontWeight: '600',
   },
   addButton: {
-    backgroundColor: '#DCFODE',
-    paddingHorizontal: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 10,
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(46, 125, 50, 0.3)',
   },
   addButtonText: {
     color: '#2E7D32',
     fontSize: 12,
+    fontWeight: '600',
+  },
+  imageContainer: {
+    width: 85,
+    height: 85,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   image: {
-    width: 90,
-    height: 90,
-    resizeMode: 'contain',
-    marginLeft: 10,
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
 });
-
-          

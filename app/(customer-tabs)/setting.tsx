@@ -1,20 +1,27 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Switch, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, Switch, StyleSheet, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { useRouter } from 'expo-router';
+import AuthService from '../../services/authService';
+import { useAuth } from '../../auth-context';
 
 export default function SettingScreen() {
   const [mealAlerts, setMealAlerts] = React.useState(true);
   const [recommendations, setRecommendations] = React.useState(true);
   const [darkMode, setDarkMode] = React.useState(false);
   const router = useRouter();
+  const { setIsLoggedIn } = useAuth();
 
   // Placeholder handlers
   const handleManageProfile = () => {};
-  const handleMealPlan = () => {};
+  const handleMealPlan = () => {
+    router.push('/meal-plan-builder');
+  };
   const handleOrders = () => {};
-  const handleChangePassword = () => {};
+  const handleChangePassword = () => {
+    router.push('/change-password');
+  };
   const handleLanguageSelection = () => {};
   const handleVoiceInput = () => {};
   const handleFAQ = () => {};
@@ -22,8 +29,54 @@ export default function SettingScreen() {
   const handleTerms = () => {
     router.push('/terms');
   };
-  const handleDeleteAccount = () => {};
-  const handleLogout = () => {};
+
+  const handleDeleteAccount = async () => {
+    Alert.alert(
+      'Delete Account',
+      'Are you sure you want to delete your account? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // TODO: Replace with actual user ID or endpoint as needed
+              await AuthService.logout(); // Log out locally first
+              // Optionally call delete API here, e.g. await api.delete('/users/me');
+              setIsLoggedIn(false);
+              router.replace('/(auth)/customer-login');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete account.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleLogout = async () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to log out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AuthService.logout();
+              setIsLoggedIn(false);
+              router.replace('/(auth)/customer-login');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to log out.');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleToggle = (setter: React.Dispatch<React.SetStateAction<boolean>>) => {
     setter((prev) => !prev);

@@ -1,12 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, Image, StyleSheet, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { View, Text, TextInput, Image, StyleSheet, TouchableOpacity, Modal, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 
 const profileImage = require('../assets/profile.png');
+
 const HEALTH_GOALS = ['Weight Loss', 'Muscle Gain', 'Maintenance'];
+
 const DIET_PREFS = [
   { key: 'vegan', label: 'Vegan' },
   { key: 'lowSugar', label: 'Low - Sugar' },
@@ -20,6 +23,7 @@ export default function EditProfile() {
   const [goal, setGoal] = useState('');
   const [dietPrefs, setDietPrefs] = useState<{ [key: string]: boolean }>({});
   const [goalModalVisible, setGoalModalVisible] = useState(false);
+  const [image, setImage] = useState('');
   const nameInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -27,32 +31,110 @@ export default function EditProfile() {
       try {
         const name = await AsyncStorage.getItem('profileName');
         if (name) setProfileName(name);
-        const a = await AsyncStorage.getItem('age');
-        if (a) setAge(a);
-        const g = await AsyncStorage.getItem('gender');
-        if (g) setGender(g);
+        
+        const ageVal = await AsyncStorage.getItem('age');
+        if (ageVal) setAge(ageVal);
+        
+        const genderVal = await AsyncStorage.getItem('gender');
+        if (genderVal) setGender(genderVal);
+        
         const goalVal = await AsyncStorage.getItem('goal');
         if (goalVal) setGoal(goalVal);
+        
         const dietVal = await AsyncStorage.getItem('dietPrefs');
         if (dietVal) setDietPrefs(JSON.parse(dietVal));
-      } catch (e) {}
+
+        const imageUri = await AsyncStorage.getItem('profileImage');
+        if (imageUri) setImage(imageUri);
+      } catch (e) {
+        console.error('Error fetching profile:', e);
+      }
     };
     fetchProfile();
   }, []);
 
   const handleSave = async () => {
     try {
-      await AsyncStorage.setItem('profileName', profileName);
-      await AsyncStorage.setItem('age', age);
-      await AsyncStorage.setItem('gender', gender);
+      if (!profileName.trim()) {
+        Alert.alert('Error', 'Please enter your name');
+        return;
+      }
+
+      await AsyncStorage.setItem('profileName', profileName.trim());
+      await AsyncStorage.setItem('age', age.trim());
+      await AsyncStorage.setItem('gender', gender.trim());
       await AsyncStorage.setItem('goal', goal);
       await AsyncStorage.setItem('dietPrefs', JSON.stringify(dietPrefs));
-      router.back();
-    } catch (e) {}
+      
+      Alert.alert('Success', 'Profile updated successfully', [
+        {
+          text: 'OK',
+          onPress: () => router.back()
+        }
+      ]);
+    } catch (e) {
+      console.error('Error saving profile:', e);
+      Alert.alert('Error', 'Failed to save profile. Please try again.');
+    }
   };
 
   const handleDietToggle = (key: string) => {
     setDietPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const pickImage = async (source: 'camera' | 'gallery') => {
+    try {
+      let result;
+      if (source === 'camera') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Sorry, we need camera permissions to make this work!');
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: 'images',
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 1,
+        });
+      } else {
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: 'images',
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 1,
+        });
+      }
+
+      if (!result.canceled) {
+        setImage(result.assets[0].uri);
+        await AsyncStorage.setItem('profileImage', result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  const showImagePickerOptions = () => {
+    Alert.alert(
+      'Choose Image Source',
+      'Select where you want to get the image from',
+      [
+        {
+          text: 'Camera',
+          onPress: () => pickImage('camera'),
+        },
+        {
+          text: 'Gallery',
+          onPress: () => pickImage('gallery'),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
   };
 
   return (
@@ -64,15 +146,24 @@ export default function EditProfile() {
         <Text style={styles.headerTitle}>Customize Profile</Text>
         <View style={{ width: 24 }} />
       </View>
-      <View style={styles.profileImageWrapper}>
-        <Image source={profileImage} style={styles.profileImage} />
-      </View>
+
+      <TouchableOpacity 
+        onPress={showImagePickerOptions}
+        style={styles.profileImageWrapper}>
+        {image ? (
+          <Image source={{ uri: image }} style={styles.profileImage} />
+        ) : (
+          <Image source={profileImage} style={styles.profileImage} />
+        )}
+      </TouchableOpacity>
+
       <View style={styles.nameRow}>
         <Text style={styles.profileName}>{profileName || 'Dina Adewale'}</Text>
         <TouchableOpacity onPress={() => nameInputRef.current?.focus()}>
           <MaterialIcons name="edit" size={20} color="#222" style={{ marginLeft: 6 }} />
         </TouchableOpacity>
       </View>
+
       <View style={styles.form}>
         <TextInput
           ref={nameInputRef}
@@ -94,11 +185,13 @@ export default function EditProfile() {
           onChangeText={setGender}
           placeholder="Gender"
         />
+
         <Text style={styles.sectionLabel}>Health Goal</Text>
         <TouchableOpacity style={styles.dropdown} onPress={() => setGoalModalVisible(true)}>
           <Text style={{ color: goal ? '#222' : '#888', fontSize: 16 }}>{goal || 'Select Goal'}</Text>
           <MaterialIcons name="arrow-drop-down" size={24} color="#888" style={{ position: 'absolute', right: 10, top: 8 }} />
         </TouchableOpacity>
+
         <Modal
           visible={goalModalVisible}
           transparent
@@ -122,6 +215,7 @@ export default function EditProfile() {
             </View>
           </Pressable>
         </Modal>
+
         <Text style={styles.sectionLabel}>Dietary Preferences</Text>
         {DIET_PREFS.map((pref) => (
           <TouchableOpacity
@@ -136,6 +230,7 @@ export default function EditProfile() {
             <Text style={styles.checkboxLabel}>{pref.label}</Text>
           </TouchableOpacity>
         ))}
+
         <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
           <Text style={styles.saveButtonText}>Save</Text>
         </TouchableOpacity>
@@ -274,4 +369,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
   },
-}); 
+});

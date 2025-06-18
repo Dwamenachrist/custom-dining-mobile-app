@@ -77,14 +77,23 @@ export default function LoginScreen() {
         console.log('🗑️ Email removed from saved data');
       }
 
-      // Always login as user
-      const response = await AuthService.login({ email, password, role: 'user' });
+      // Login without role - API determines user type
+      const response = await AuthService.login({ email, password });
 
       if (response.success) {
         setIsLoggedIn(true);
         // The RootLayout will automatically redirect to the (tabs) stack.
       } else {
-        setError(response.message || 'Login failed. Please check your credentials.');
+        // Check if error is related to email verification
+        const errorMessage = response.message || 'Login failed. Please check your credentials.';
+        
+        if (errorMessage.toLowerCase().includes('verify') || 
+            errorMessage.toLowerCase().includes('unverified') ||
+            errorMessage.toLowerCase().includes('verification')) {
+          setError('Please verify your email before logging in. Check your inbox for the verification link.');
+        } else {
+          setError(errorMessage);
+        }
       }
     } catch (error) {
       setError('An unexpected error occurred. Please try again.');
