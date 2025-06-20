@@ -26,14 +26,15 @@ export const ENDPOINTS = {
   resetPassword: '/auth/reset-password',
   changePassword: '/auth/change-password',
   verifyEmail: '/auth/verify-email',
+  resendVerification: '/auth/resend-verification',
   // sendOTPMobile: '/auth/send-otp-mobile', // Removed - not used
   // sendOTPEmail: '/auth/send-otp-email', // Removed - not used
   // verifyOTP: '/auth/verify-otp', // Removed - not used
   refreshToken: '/auth/refresh-token',
   
   // User
-  profile: '/users/profile',
-  updateProfile: '/users/profile',
+  profile: '/user/profile',
+  updateProfile: '/user/profile',
   
   // App-specific endpoints (add as needed)
   restaurants: '/restaurants',

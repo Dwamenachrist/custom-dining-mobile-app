@@ -99,11 +99,6 @@ export default function LoginScreen() {
     router.push('/(auth)/forgot-password');
   };
 
-  const handleSocialLogin = (provider: 'google' | 'microsoft' | 'apple') => {
-    console.log(`Login with ${provider}`);
-    // TODO: Implement social authentication
-  };
-
   const handleLanguageChange = () => {
     console.log('Language change pressed');
     // In a real app, this would open a modal or dropdown.
@@ -126,7 +121,7 @@ export default function LoginScreen() {
           {/* Logo and Welcome Text */}
           <View className="mb-8">
             <Image
-              source={require('../../assets/Logo.png')}
+              source={require('../../assets/icon.png')}
               className="self-center align-center w-24 h-24 mb-6"
               
               resizeMode="contain"
@@ -186,35 +181,6 @@ export default function LoginScreen() {
                 <ActivityIndicator size="small" color={colors.primary} />
               </View>
             )}
-          </View>
-
-          {/* 'Or Continue With' Divider */}
-          <View className="flex-row items-center my-8">
-            <View className="flex-1 h-px bg-gray" />
-            <Text className="mx-4 text-gray">Or Continue With</Text>
-            <View className="flex-1 h-px bg-gray" />
-          </View>
-
-          {/* Social Logins */}
-          <View className="flex-row justify-center space-x-6">
-            <TouchableOpacity 
-              className="w-12 h-12 bg-white rounded-full border border-gray items-center justify-center"
-              onPress={() => handleSocialLogin('google')}
-              disabled={isLoading}>
-              <Image source={require('../../assets/google.png')} className="w-6 h-6" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              className="w-12 h-12 bg-white rounded-full border border-gray items-center justify-center"
-              onPress={() => handleSocialLogin('microsoft')}
-              disabled={isLoading}>
-              <Image source={require('../../assets/microsoft.png')} className="w-6 h-6" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              className="w-12 h-12 bg-white rounded-full border border-gray items-center justify-center"
-              onPress={() => handleSocialLogin('apple')}
-              disabled={isLoading}>
-              <Image source={require('../../assets/apple.png')} className="w-6 h-6" />
-            </TouchableOpacity>
           </View>
 
           {/* Language Selector */}

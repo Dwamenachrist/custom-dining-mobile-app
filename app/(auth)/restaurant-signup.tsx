@@ -4,6 +4,7 @@ import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Image, Touchabl
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Button } from '../../components/Button';
 import { TextInput } from '../../components/TextInput';
+import { EmailVerificationToast } from '../../components/EmailVerificationToast';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import AuthService from '../../services/authService';
@@ -26,6 +27,7 @@ export default function SignupScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [certUploaded, setCertUploaded] = useState(false);
   const [certFiles, setCertFiles] = useState<string[]>([]);
+  const [showEmailToast, setShowEmailToast] = useState(false);
 
   // Add city dropdown options
   const cityOptions = ['Lagos', 'Abuja', 'Port Harcourt', 'Kano'];
@@ -87,13 +89,16 @@ export default function SignupScreen() {
       if (response.success) {
         console.log('Signup successful:', response.data);
 
-        // Note: Registration doesn't auto-login, so redirect to login
-        // User may need to verify email or login manually
-        setError(''); // Clear any previous errors
+        // Clear any previous errors
+        setError('');
 
-        // Show success message and redirect to login
-        alert('Account created successfully! Please login to continue.');
-        router.push('/(auth)/restaurant-login');
+        // Show email verification toast
+        setShowEmailToast(true);
+        
+        // Navigate to login after toast is dismissed (or after delay)
+        setTimeout(() => {
+          router.push('/(auth)/restaurant-login');
+        }, 6500); // Slightly longer than toast duration
       } else {
         setError(response.message || 'Signup failed. Please try again.');
       }
@@ -111,12 +116,12 @@ export default function SignupScreen() {
 
   const handleTermsPress = () => {
     console.log('Terms of Use pressed');
-    router.push('/terms');
+    router.push('/restaurant-terms');
   };
 
   const handlePrivacyPress = () => {
     console.log('Privacy Policy pressed');
-    router.push('/terms');
+    router.push('/restaurant-terms');
   };
 
   return (
@@ -128,7 +133,7 @@ export default function SignupScreen() {
         {/* Logo and Welcome Text */}
         <View className="mb-8 mt-20">
           <Image
-            source={require('../../assets/Logo.png')}
+            source={require('../../assets/icon.png')}
             className="self-center w-24 h-24 mb-6"
             resizeMode="contain"
           />
@@ -288,7 +293,7 @@ export default function SignupScreen() {
             <View className="flex-1">
               <Text className="text-darkGray text-sm leading-5" >
                 I accept the{' '}
-                <Text className="text-primary font-medium" onPress={() => router.push('/terms')}>
+                <Text className="text-primary font-medium" onPress={() => router.push('/restaurant-terms')}>
                   Terms of Use & Privacy Policy
                 </Text>
               </Text>
@@ -333,6 +338,13 @@ export default function SignupScreen() {
 
         </ScrollView>
       </KeyboardAvoidingView>
+      
+      {/* Email Verification Toast */}
+      <EmailVerificationToast
+        visible={showEmailToast}
+        email={email}
+        onClose={() => setShowEmailToast(false)}
+      />
     </SafeAreaView>
   );
 } 

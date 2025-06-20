@@ -1,11 +1,22 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, FlatList, Image, Dimensions, SafeAreaView, StatusBar, ImageSourcePropType, Pressable } from 'react-native';
+import { 
+  View, 
+  Text, 
+  FlatList, 
+  Image, 
+  Dimensions, 
+  StatusBar, 
+  ImageSourcePropType, 
+  Pressable, 
+  Platform,
+  StyleSheet 
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '../../components/Button';
-import { colors } from '~/theme/colors';
+import { colors } from '../../theme/colors';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Get the screen dimensions for the FlatList
-const { width, height } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // --- Onboarding Data ---
 interface Slide {
@@ -26,7 +37,7 @@ const slides: Slide[] = [
     id: '2',
     image: require('../../assets/restaurant-onboard2.png'),
     title: 'Share Your Health-Friendly Dishes',
-    description: 'Highlight diabetic-safe, low-carb, or vegan meals. We’ll show them to users looking for smart options nearby.',
+    description: 'Highlight diabetic-safe, low-carb, or vegan meals. We\'ll show them to users looking for smart options nearby.',
   },
   {
     id: '3',
@@ -42,13 +53,10 @@ const slides: Slide[] = [
   },
 ];
 
-
-
-
 // --- Main Onboarding Screen ---
-export default function OnboardingScreen() {
+export default function RestaurantOnboardingScreen() {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
-  const router = useRouter(); // Using Expo Router's hook
+  const router = useRouter();
   const flatListRef = useRef<FlatList>(null);
 
   // Update the active dot indicator on scroll
@@ -62,92 +70,200 @@ export default function OnboardingScreen() {
   const handleNext = () => {
     const nextSlideIndex = currentSlideIndex + 1;
     if (nextSlideIndex < slides.length) {
-      const offset = nextSlideIndex * width;
+      const offset = nextSlideIndex * SCREEN_WIDTH;
       flatListRef.current?.scrollToOffset({ offset, animated: true });
     } else {
-      // On the last slide, "Get Started" button navigates to signup
-      router.push('/(auth)/restaurant-login'); // Navigate to signup screen
+      router.push('/(auth)/restaurant-signup');
     }
   };
 
   // Handle the skip action
   const handleSkip = () => {
-    // Navigate directly to the signup screen
-    router.push('/(auth)/restaurant-login'); // Navigate to signup screen
+    router.push('/(auth)/restaurant-signup');
   };
 
+  const SlideItem = ({ item }: { item: Slide }) => (
+    <View style={styles.slideContainer}>
+      <View style={styles.imageContainer}>
+        <Image 
+          source={item.image} 
+          style={styles.image}
+          resizeMode="cover"
+        />
+      </View>
 
-  const SlideItem = ({ item }: { item: Slide }) => {
-    return (
-      <View className="relative items-center" style={{ width: width, height: height * 0.85 }}>
-        {/* Background Image */}
-        <Image source={item.image} className="h-[70%] w-full" resizeMode="cover" />
-
-        {/* White Card with Text */}
-        <View
-          className="absolute bottom-[3%] w-[90%] bg-white rounded-3xl pl-8 pr-8 pt-6 pb-8 items-center"
-          style={{
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.15,
-            shadowRadius: 10,
-            elevation: 8,
-          }}>
-          <Text className="text-2xl font-bold text-center text-black">{item.title}</Text>
-          <Text className="text-center text-darkGray mt-4 leading-6">{item.description}</Text>
-          <View className="w-full pt-8">
-            <Button 
-              title={currentSlideIndex === slides.length - 1 ? "Get Started" : "Next"} 
-              variant="primary" 
-              onPress={handleNext} 
-            />
-          </View>
+      <View style={styles.contentCard}>
+        <View style={styles.textContent}>
+          <Text style={styles.title}>
+            {item.title}
+          </Text>
+          
+          <Text style={styles.description}>
+            {item.description}
+          </Text>
+        </View>
+        
+        <View style={styles.buttonContainer}>
+          <Button 
+            title={currentSlideIndex === slides.length - 1 ? "Get Started" : "Next"} 
+            variant="primary" 
+            style={{ width: '100%' }}
+            onPress={handleNext} 
+          />
         </View>
       </View>
-    );
-  };
+    </View>
+  );
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <StatusBar barStyle="dark-content" />
-
-      {/* Swipeable slides */}
-      <FlatList
-        ref={flatListRef}
-        data={slides}
-        renderItem={({ item }) => <SlideItem item={item} />}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item.id}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={{
-          itemVisiblePercentThreshold: 50,
-        }}
+    <SafeAreaView style={styles.container} edges={[]}>
+      <StatusBar 
+        translucent 
+        backgroundColor="transparent" 
+        barStyle="dark-content" 
       />
+      
+      <View style={styles.mainContent}>
+        <FlatList
+          ref={flatListRef}
+          data={slides}
+          renderItem={({ item }) => <SlideItem item={item} />}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(item) => item.id}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+          bounces={false}
+          scrollEventThrottle={16}
+        />
 
-      {/* Footer with dots and buttons */}
-      <View className="px-6 pb-8 pt-4">
-        {/* Dot Indicators */}
-        <View className="flex-row justify-center items-center mb-8">
-          {slides.map((_, index) => (
-            <View
-              key={index}
-              className={`h-2 rounded-full mx-1 ${currentSlideIndex === index ? 'bg-primary w-6' : 'bg-gray w-2'
-                }`}
-            />
-          ))}
-        </View>
+        
 
-        {/* Skip Button */}
-        <View className="flex-row justify-start">
-          <Pressable onPress={handleSkip}>
-            <Text style={{ color: colors.primary }} className="text-base font-medium">
-              SKIP
+        <View style={styles.footer}>
+          {/* Dots Container - centered at bottom */}
+          <View style={styles.dotsContainer}>
+            {slides.map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.dot,
+                  {
+                    backgroundColor: currentSlideIndex === index ? colors.primary : '#d1d5db',
+                    width: currentSlideIndex === index ? 32 : 8,
+                  }
+                ]}
+              />
+            ))}
+          </View>
+          
+          {/* Skip Button - positioned separately */}
+          <Pressable onPress={handleSkip} style={styles.skipButton}>
+            <Text style={styles.skipText}>
+              Skip
             </Text>
           </Pressable>
+
         </View>
       </View>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
+  mainContent: {
+    flex: 1,
+  },
+  slideContainer: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    backgroundColor: '#f8f9fa',
+  },
+  imageContainer: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT * 0.55,
+    backgroundColor: '#e9ecef',
+    overflow: 'hidden',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+  },
+  contentCard: {
+    position: 'absolute',
+    bottom: 160,
+    left: 20,
+    right: 20,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
+    minHeight: 280,
+    justifyContent: 'space-between',
+  },
+  textContent: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    textAlign: 'center',
+    color: '#1a1a1a',
+    marginBottom: 12,
+    lineHeight: 30,
+  },
+  description: {
+    fontSize: 16,
+    textAlign: 'center',
+    color: '#6c757d',
+    lineHeight: 24,
+    paddingHorizontal: 8,
+  },
+  buttonContainer: {
+    width: '100%',
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 25,
+    height: 120,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  skipButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    alignSelf: 'flex-start',
+  },
+  skipText: {
+    color: colors.primary,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    fontSize: 16,
+  },
+  dotsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dot: {
+    height: 8,
+    borderRadius: 4,
+    marginHorizontal: 4,
+  },
+});

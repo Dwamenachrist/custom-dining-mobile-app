@@ -39,15 +39,27 @@ export default function ForgotPasswordScreen() {
 
             if (response.success) {
                 console.log('✅ Forgot password email sent successfully');
+                
+                // Proceed to success screen
                 setIsSuccess(true);
-                // Save email for potential use in change password screen
                 await AsyncStorage.setItem('forgot_password_email', email);
             } else {
-                setError(response.message || 'Failed to send reset email. Please try again.');
+                // Display the actual backend error message (same pattern as customer-signup.tsx)
+                console.log('Backend error response:', response);
+                setError(response.message || response.error || 'Failed to send temporary password. Please try again.');
             }
-        } catch (error) {
+        } catch (err: any) {
+            const error = err;
             console.error('❌ Forgot password error:', error);
-            setError('An unexpected error occurred. Please try again.');
+            
+            // Check if it's a structured error response (same pattern as customer-signup.tsx)
+            if (error.response?.data?.message) {
+                setError(error.response.data.message);
+            } else if (error.message) {
+                setError(error.message);
+            } else {
+                setError('An unexpected error occurred. Please try again.');
+            }
         } finally {
             setIsLoading(false);
         }
@@ -58,7 +70,7 @@ export default function ForgotPasswordScreen() {
     };
 
     const handleGoToChangePassword = () => {
-        // Navigate directly to change password screen with forgot password flag
+        // Navigate to change password screen with parameter to indicate it's from forgot password flow
         router.push('/change-password?fromForgotPassword=true');
     };
 
@@ -91,22 +103,50 @@ export default function ForgotPasswordScreen() {
                         <Text className="text-2xl font-bold text-center text-gray-800 mb-4">
                             Check Your Email
                         </Text>
-                        <Text className="text-base text-center text-gray-500 leading-6">
-                            We've sent a password reset link to{' '}
+                        <Text className="text-base text-center text-gray-500 leading-6 mb-4">
+                            We've sent a temporary password to{' '}
                             <Text className="font-semibold text-gray-800">{email}</Text>
                         </Text>
-                        <Text className="text-sm text-center text-gray-500 mt-4 leading-6">
-                            Click the link in the email to open the app and reset your password. If you don't see the email, check your spam folder.
+                        
+                        {/* Step-by-step instructions */}
+                        <View className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                            <Text className="text-sm font-semibold text-blue-800 mb-2">📧 Next Steps:</Text>
+                            <Text className="text-sm text-blue-700 mb-1">1. Check your email inbox (and spam folder)</Text>
+                            <Text className="text-sm text-blue-700 mb-1">2. Find the temporary password in the email</Text>
+                            <Text className="text-sm text-blue-700 mb-1">3. Copy the temporary password</Text>
+                            <Text className="text-sm text-blue-700">4. Use it as your "current password" below</Text>
+                        </View>
+                        
+                        <Text className="text-xs text-center text-gray-400 leading-5">
+                            The temporary password will be valid for 15 minutes. If you don't see the email, check your spam folder.
                         </Text>
+                        
+                        {/* Alternative for unregistered users */}
+                        <View className="bg-gray-50 border border-gray-200 rounded-lg p-4 mt-4">
+                            <Text className="text-sm font-semibold text-gray-700 mb-2">Don't have an account?</Text>
+                            <TouchableOpacity 
+                                onPress={() => router.push('/(auth)/customer-signup')}
+                                className="bg-gray-600 rounded-lg py-2 px-4"
+                            >
+                                <Text className="text-white text-center text-sm font-medium">Create New Account</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
 
                     {/* Action Buttons */}
                     <View className="mb-8">
                         <Button
-                            title="Back to Login"
+                            title="Go to Change Password"
                             variant="primary"
-                            onPress={handleBackToLogin}
+                            onPress={handleGoToChangePassword}
                         />
+                        <View className="mt-4">
+                            <Button
+                                title="Back to Login"
+                                variant="outline"
+                                onPress={handleBackToLogin}
+                            />
+                        </View>
                     </View>
                 </View>
             </SafeAreaView>
@@ -151,8 +191,8 @@ export default function ForgotPasswordScreen() {
                     <Text className="text-2xl font-bold text-center text-gray-800 mb-2">
                         Forgot Your Password?
                     </Text>
-                        <Text className="text-base text-center text-gray-500 leading-6">
-                            Enter your email address and we'll send you a link to reset your password
+                    <Text className="text-base text-center text-gray-500 leading-6">
+                        Enter your email address and we'll send you a temporary password to reset your account
                     </Text>
                 </View>
 
@@ -184,10 +224,10 @@ export default function ForgotPasswordScreen() {
                         </View>
                     ) : null}
 
-                    {/* Send Reset Link Button */}
+                    {/* Send Temporary Password Button */}
                     <View className="mb-6">
                     <Button
-                            title="Send Reset Link"
+                            title="Send Temporary Password"
                         variant="primary"
                             onPress={handleSubmit}
                             disabled={isLoading || !email || !isEmailValid}

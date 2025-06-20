@@ -3,130 +3,107 @@ import { View, Text, TouchableOpacity, Image, StyleSheet, ScrollView } from 'rea
 import { Button } from '../../components/Button';
 import { colors } from '../../theme/colors';
 import { Ionicons } from '@expo/vector-icons';
-import { TextInput } from '~/components/TextInput';
+import { TextInput } from '../../components/TextInput';
 import { useRouter } from 'expo-router';
-
-type CartItem = {
-  id: string;
-  title: string;
-  subtitle: string;
-  imageUri: string;
-  price: number;
-  quantity: number;
-};
+import { useCart } from '../../cart-context';
 
 export default function CartScreen() {
-  const [cartItems, setCartItems] = useState<CartItem[]>([
-    {
-      id: '1',
-      title: 'Almond swallow & Vegetable soup',
-      subtitle: "Dammy's kitchen",
-      imageUri: 'https://i.imgur.com/QZlZh4V.jpg', // placeholder or real image URL
-      price: 7000,
-      quantity: 1,
-    },
-    {
-      id: '2',
-      title: 'Lean breakfast combo',
-      subtitle: 'So Fresh',
-      imageUri: 'https://i.imgur.com/WoxA2SA.jpg',
-      price: 3500,
-      quantity: 1,
-    },
-    {
-      id: '3',
-      title: 'Lean breakfast combo',
-      subtitle: 'So Fresh',
-      imageUri: 'https://i.imgur.com/WoxA2SA.jpg',
-      price: 3500,
-      quantity: 1,
-    },
-    {
-      id: '4',
-      title: 'Lean breakfast combo',
-      subtitle: 'So Fresh',
-      imageUri: 'https://i.imgur.com/WoxA2SA.jpg',
-      price: 3500,
-      quantity: 1,
-    },
-    {
-      id: '5',
-      title: 'Lean breakfast combo',
-      subtitle: 'So Fresh',
-      imageUri: 'https://i.imgur.com/WoxA2SA.jpg',
-      price: 3500,
-      quantity: 1,
-    },
-  ]);
-
-  const [selectedId, setSelectedId] = useState('1'); // Selected item's radio button
+  const { items: cartItems, removeFromCart, updateQuantity, getTotalPrice } = useCart();
+  const [selectedId, setSelectedId] = useState(cartItems.length > 0 ? cartItems[0].meal.id : ''); 
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [pickup, setPickup] = useState(false);
   const [delivery, setDelivery] = useState(true);
 
+  const router = useRouter();
+
   // Quantity adjustment handlers
   function changeQuantity(id: string, delta: number) {
-    setCartItems((items) =>
-      items.map((item) =>
-        item.id === id
-          ? { ...item, quantity: Math.max(1, item.quantity + delta) }
-          : item
-      )
-    );
+    const item = cartItems.find((item: any) => item.meal.id === id);
+    if (item) {
+      const newQuantity = item.quantity + delta;
+      updateQuantity(id, newQuantity);
+    }
   }
 
   // Calculate costs
-  const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const subtotal = getTotalPrice();
   const deliveryFee = delivery ? 1500 : 0;
   const pickupFee = pickup ? 0 : 1500;
   const total = subtotal + deliveryFee;
 
-  const router = useRouter();
+  // If cart is empty, show empty state
+  if (cartItems.length === 0) {
+    return (
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name={'arrow-back'} size={24} color={colors.primary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Your Cart</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        {/* Empty State */}
+        <View className="flex-1 justify-center items-center px-8">
+          <Ionicons name="basket-outline" size={80} color={colors.gray} />
+          <Text className="text-xl font-bold text-gray-900 mt-4 mb-2">Your cart is empty</Text>
+          <Text className="text-gray-600 text-center mb-8 leading-6">
+            Browse our recommended meals and add items to your cart to get started.
+          </Text>
+          <TouchableOpacity 
+            onPress={() => router.push('/meal/recommended')}
+            className="bg-green-600 px-6 py-3 rounded-xl"
+          >
+            <Text className="text-white font-semibold">Browse Meals</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => {/* handle back navigation */}}>
-          <Ionicons
-            name={'arrow-back'}
-            size={24}
-            color={colors.primary}
-          />
+        <TouchableOpacity onPress={() => router.back()}>
+          <Ionicons name={'arrow-back'} size={24} color={colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Your Cart</Text>
-        <View style={{ width: 24 }} />{/* Placeholder for spacing */}
+        <View style={{ width: 24 }} />
       </View>
 
       <ScrollView style={styles.scrollArea} keyboardShouldPersistTaps="handled">
 
         {/* Cart Items */}
         {cartItems.map((item) => {
-          const isSelected = selectedId === item.id;
+          const isSelected = selectedId === item.meal.id;
           return (
-            <View key={item.id} style={styles.cartItem}>
+            <View key={item.meal.id} style={styles.cartItem}>
               {/* Radio */}
               <TouchableOpacity
                 style={styles.radioCircle}
-                onPress={() => setSelectedId(item.id)}
+                onPress={() => setSelectedId(item.meal.id)}
                 activeOpacity={0.7}
               >
                 {isSelected && <View style={styles.radioCircleSelected} />}
               </TouchableOpacity>
 
               {/* Image */}
-              <Image source={{ uri: item.imageUri }} style={styles.itemImage} />
+              <View className="w-15 h-15 rounded-full overflow-hidden mr-3">
+                <Image source={item.meal.image} style={styles.itemImage} />
+              </View>
 
               {/* Details */}
               <View style={styles.itemDetails}>
-                <Text style={styles.itemTitle}>{item.title}</Text>
-                <Text style={styles.itemSubtitle}>{item.subtitle}</Text>
+                <Text style={styles.itemTitle}>{item.meal.name}</Text>
+                <Text style={styles.itemSubtitle}>{item.meal.restaurant}</Text>
 
                 {/* Quantity control */}
                 <View style={styles.qtyControl}>
                   <TouchableOpacity
-                    onPress={() => changeQuantity(item.id, -1)}
+                    onPress={() => changeQuantity(item.meal.id, -1)}
                     style={styles.qtyButton}
                     activeOpacity={0.7}
                   >
@@ -136,7 +113,7 @@ export default function CartScreen() {
                   <Text style={styles.qtyNumber}>{item.quantity}</Text>
 
                   <TouchableOpacity
-                    onPress={() => changeQuantity(item.id, 1)}
+                    onPress={() => changeQuantity(item.meal.id, 1)}
                     style={styles.qtyButton}
                     activeOpacity={0.7}
                   >
@@ -146,12 +123,17 @@ export default function CartScreen() {
               </View>
 
               {/* Price */}
-              <Text style={styles.itemPrice}>₦{(item.price * item.quantity).toLocaleString()}</Text>
+              <Text style={styles.itemPrice}>₦{(item.meal.price * item.quantity).toLocaleString()}</Text>
 
               {/* Remove icon (X) */}
               <TouchableOpacity onPress={() => {
-                setCartItems((items) => items.filter((i) => i.id !== item.id));
-                if (selectedId === item.id && cartItems.length > 1) setSelectedId(cartItems[0].id);
+                removeFromCart(item.meal.id);
+                if (selectedId === item.meal.id && cartItems.length > 1) {
+                  const remainingItems = cartItems.filter(i => i.meal.id !== item.meal.id);
+                  if (remainingItems.length > 0) {
+                    setSelectedId(remainingItems[0].meal.id);
+                  }
+                }
               }} style={styles.removeBtn}>
                 <Text style={styles.removeBtnText}>×</Text>
               </TouchableOpacity>

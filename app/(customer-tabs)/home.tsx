@@ -1,4 +1,4 @@
-import { View, ScrollView, Text, StyleSheet, TouchableOpacity, StatusBar } from 'react-native';
+import { View, ScrollView, Text, StyleSheet, TouchableOpacity, StatusBar, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -6,11 +6,14 @@ import GreetingHeader from '../../components/Greeting';
 import Category from '../../components/Categories';
 import RestaurantCard from '../../components/RestaurantCards';
 import MealCard from '../../components/MealCards';
+import { EmailVerificationBanner } from '../../components/EmailVerificationBanner';
 import { useAuth } from '../../auth-context';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { mockApi, MockMeal } from '../../services/mockData';
+import { getUserMeals, DietaryPreferences, Meal as BackendMeal, Restaurant as BackendRestaurant } from '../../services/api';
+import { getHybridMeals, getHybridRestaurants } from '../../services/hybridMealService';
+import AuthService from '../../services/authService';
 
-// Types
+// Types for frontend components
 interface Meal {
   id: string;
   name: string;
@@ -36,70 +39,35 @@ interface Restaurant {
   deliveryTime: string;
 }
 
-const TOP_RESTAURANTS: Restaurant[] = [
-  {
-    id: '1',
-    name: 'Green Chef Kitchen',
-    image: require('../../assets/restaurant1.png'),
-    rating: 4.8,
-    reviewCount: 245,
-    tags: ['Vegan', 'Healthy', 'Organic'],
-    distance: '1.2 km',
-    deliveryTime: '20 - 30 min'
-  },
-  {
-    id: '2',
-    name: 'African Delights',
-    image: require('../../assets/restaurant2.png'),
-    rating: 4.6,
-    reviewCount: 189,
-    tags: ['African', 'Traditional', 'Spicy'],
-    distance: '2.5 km',
-    deliveryTime: '25 - 35 min'
-  },
-  {
-    id: '3',
-    name: 'Healthy Bites',
-    image: require('../../assets/restaurant3.png'),
-    rating: 4.9,
-    reviewCount: 312,
-    tags: ['Healthy', 'Organic', 'Fresh'],
-    distance: '1.8 km',
-    deliveryTime: '15 - 25 min'
-  }
-];
-
-// Function to convert MockMeal to Meal interface
-const convertMockMealToMeal = (mockMeal: MockMeal, index: number): Meal => {
-  // Array of meal images to rotate through
-  const mealImages = [
-    require('../../assets/recommendation1.png'),
-    require('../../assets/recommendation2.png'),
-    require('../../assets/recommendation3.png'),
-  ];
-  
-  // Array of restaurant names to rotate through
-  const restaurantNames = [
-    'Green Chef Kitchen',
-    'Fresh Garden Bistro',
-    'Healthy Harvest',
-    'Organic Oasis',
-    'Farm to Table',
-    'Pure Plate'
-  ];
-
+// Function to convert backend Meal to frontend Meal interface
+const convertBackendMealToMeal = (backendMeal: BackendMeal, index: number): Meal => {
   return {
-    id: mockMeal.id.toString(),
-    name: mockMeal.name,
-    description: mockMeal.description,
-    image: mealImages[index % mealImages.length],
-    price: Math.floor(mockMeal.nutritionalInfo.calories / 25), // Convert calories to reasonable price
-    calories: mockMeal.nutritionalInfo.calories,
-    tags: mockMeal.dietaryTags.map(tag => tag.charAt(0).toUpperCase() + tag.slice(1).replace('-', ' ')),
+    id: backendMeal.id, // Backend uses string IDs
+    name: backendMeal.name,
+    description: backendMeal.description,
+    // Use hybrid meal image if available, otherwise placeholder
+    image: backendMeal.image || { uri: 'https://via.placeholder.com/150x100/758F76/FFFFFF?text=No+Image' },
+    price: parseFloat(backendMeal.price) || 3000, // Convert string price to number
+    calories: backendMeal.nutritionalInfo?.calories || 400,
+    tags: backendMeal.dietaryTags.map(tag => tag.charAt(0).toUpperCase() + tag.slice(1).replace('-', ' ')),
     restaurant: {
-      id: mockMeal.restaurantId || (index + 1).toString(),
-      name: restaurantNames[index % restaurantNames.length]
+      id: backendMeal.restaurantId || 'unknown',
+      name: backendMeal.restaurant?.name || 'Restaurant Name'
     }
+  };
+};
+
+// Function to convert hybrid restaurant to frontend Restaurant interface
+const convertHybridRestaurantToRestaurant = (hybridRestaurant: any, index: number): Restaurant => {
+  return {
+    id: hybridRestaurant.restaurantId,
+    name: hybridRestaurant.restaurantName,
+    image: hybridRestaurant.image,
+    rating: hybridRestaurant.rating || 4.5,
+    reviewCount: hybridRestaurant.reviewCount || 100,
+    tags: [hybridRestaurant.cuisineType || 'Restaurant'],
+    distance: '2.0 km', // Default since backend doesn't provide
+    deliveryTime: hybridRestaurant.deliveryTime || '25 - 35 min'
   };
 };
 
@@ -111,6 +79,8 @@ export default function HomeScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [userName, setUserName] = useState('Guest');
   const [userImage, setUserImage] = useState<string | null>(null);
+  const [dietaryPrefs, setDietaryPrefs] = useState<DietaryPreferences | null>(null);
+  const [isPersonalized, setIsPersonalized] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -137,8 +107,112 @@ export default function HomeScreen() {
       
       setUserName(savedName);
       if (image) setUserImage(image);
+
+      // Load dietary preferences from meal plan builder
+      const dietaryData = await AsyncStorage.getItem('dietaryPreferences');
+      if (dietaryData) {
+        const parsed = JSON.parse(dietaryData);
+        setDietaryPrefs(parsed);
+        console.log('🍎 Loaded dietary preferences for personalization:', parsed);
+      }
     } catch (error) {
       console.error('Error loading user profile:', error);
+    }
+  };
+
+  // Filter meals based on dietary preferences
+  const filterMealsByPreferences = (meals: BackendMeal[]): BackendMeal[] => {
+    if (!dietaryPrefs || (!dietaryPrefs.dietaryRestrictions.length && !dietaryPrefs.preferredMealTags.length)) {
+      return meals;
+    }
+
+    const filtered = meals.filter(meal => {
+      // Check if meal matches dietary restrictions
+      const matchesRestrictions = dietaryPrefs.dietaryRestrictions.length === 0 || 
+        dietaryPrefs.dietaryRestrictions.some(restriction => 
+          meal.dietaryTags.some(tag => 
+            tag.toLowerCase().includes(restriction.toLowerCase()) ||
+            restriction.toLowerCase().includes(tag.toLowerCase())
+          )
+        );
+
+      // Check if meal matches preferred tags
+      const matchesPreferredTags = dietaryPrefs.preferredMealTags.length === 0 ||
+        dietaryPrefs.preferredMealTags.some(preferred => 
+          meal.dietaryTags.some(tag => 
+            tag.toLowerCase().includes(preferred.toLowerCase()) ||
+            preferred.toLowerCase().includes(tag.toLowerCase())
+          )
+        );
+
+      return matchesRestrictions || matchesPreferredTags;
+    });
+
+    console.log(`🎯 Filtered ${meals.length} meals to ${filtered.length} based on preferences`);
+    setIsPersonalized(filtered.length !== meals.length && filtered.length > 0);
+    
+    return filtered.length > 0 ? filtered : meals;
+  };
+
+  // Load meals from hybrid service (backend + comprehensive local)
+  const loadPersonalizedMeals = async (): Promise<Meal[]> => {
+    try {
+      // First try personalized meals if user has auth token
+      const authToken = await AsyncStorage.getItem('auth_token');
+      if (authToken && dietaryPrefs) {
+        console.log('🌐 Attempting to load personalized meals from backend...');
+        const response = await getUserMeals();
+        
+        if (response.success && response.data && response.data.length > 0) {
+          console.log('✅ Loaded personalized meals from backend!');
+          return response.data.slice(0, 6).map((meal, index) => convertBackendMealToMeal(meal, index));
+        }
+      }
+
+      // Fall back to hybrid meals (backend + comprehensive local)
+      console.log('🎯 Loading hybrid meals (backend + local)...');
+      const response = await getHybridMeals();
+      
+      console.log('🔍 DEBUG: Full hybrid meals response:', JSON.stringify(response, null, 2));
+      
+      if (response.success && response.data && response.data.length > 0) {
+        console.log('✅ Loaded hybrid meals successfully!');
+        console.log('🔍 DEBUG: First hybrid meal:', JSON.stringify(response.data[0], null, 2));
+        
+        // Filter meals based on dietary preferences
+        const filteredMeals = filterMealsByPreferences(response.data);
+        const convertedMeals = filteredMeals.slice(0, 6).map((meal, index) => convertBackendMealToMeal(meal, index));
+        
+        console.log('🔍 DEBUG: First converted hybrid meal:', JSON.stringify(convertedMeals[0], null, 2));
+        
+        return convertedMeals;
+      }
+
+      // If no hybrid data, return empty array
+      console.log('⚠️ No meals available from hybrid service');
+      return [];
+    } catch (error) {
+      console.error('❌ Error loading meals from hybrid service:', error);
+      return [];
+    }
+  };
+
+  // Load restaurants from hybrid service
+  const loadTopRestaurants = async (): Promise<Restaurant[]> => {
+    try {
+      console.log('🏪 Loading restaurants from hybrid service...');
+      const response = await getHybridRestaurants();
+      
+      if (response.success && response.data && response.data.length > 0) {
+        console.log('✅ Loaded restaurants from hybrid service!');
+        return response.data.slice(0, 5).map((restaurant, index) => convertHybridRestaurantToRestaurant(restaurant, index));
+      }
+
+      console.log('⚠️ No restaurants available from hybrid service');
+      return [];
+    } catch (error) {
+      console.error('❌ Error loading restaurants from hybrid service:', error);
+      return [];
     }
   };
 
@@ -146,15 +220,17 @@ export default function HomeScreen() {
     try {
       setIsLoading(true);
       
-      // Load meals from mock API
-      const mockMeals = await mockApi.getMeals();
-      const convertedMeals = mockMeals.slice(0, 6).map((mockMeal, index) => convertMockMealToMeal(mockMeal, index));
-      setRecommendedMeals(convertedMeals);
+      const [meals, restaurants] = await Promise.all([
+        loadPersonalizedMeals(),
+        loadTopRestaurants()
+      ]);
       
-      // Load restaurants
-      setTopRestaurants(TOP_RESTAURANTS);
+      setRecommendedMeals(meals);
+      setTopRestaurants(restaurants);
+      
+      console.log(`📊 Loaded ${meals.length} meals and ${restaurants.length} restaurants`);
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('❌ Error loading data:', error);
     } finally {
       setIsLoading(false);
     }
@@ -169,7 +245,7 @@ export default function HomeScreen() {
         description: meal.description,
         price: meal.price.toString(),
         calories: meal.calories.toString(),
-        image: meal.image,
+        imageSource: JSON.stringify(meal.image),
         tags: JSON.stringify(meal.tags),
         restaurantId: meal.restaurant.id,
         restaurantName: meal.restaurant.name
@@ -179,13 +255,13 @@ export default function HomeScreen() {
 
   const handleRestaurantPress = (restaurant: Restaurant) => {
     router.push({
-      pathname: '/restaurants',
+      pathname: '/restaurant-profile',
       params: {
         id: restaurant.id,
         name: restaurant.name,
         rating: restaurant.rating.toString(),
         reviewCount: restaurant.reviewCount.toString(),
-        image: restaurant.image,
+        imageSource: JSON.stringify(restaurant.image),
         tags: JSON.stringify(restaurant.tags),
         distance: restaurant.distance,
         deliveryTime: restaurant.deliveryTime
@@ -202,10 +278,43 @@ export default function HomeScreen() {
     console.log('Adding to plan:', meal.name);
   };
 
+  const handleResendEmail = async () => {
+    try {
+      console.log('📧 Resending verification email...');
+      
+      // Show loading feedback
+      Alert.alert('📧 Sending...', 'Resending verification email...');
+      
+      // Call AuthService to resend verification email
+      const response = await AuthService.resendVerificationEmail();
+      
+      if (response.success) {
+        Alert.alert(
+          '✅ Email Sent!', 
+          'We\'ve sent a new verification link to your email. Please check your inbox.'
+        );
+      } else {
+        Alert.alert(
+          '❌ Failed to Send', 
+          response.message || 'Failed to resend verification email. Please try again.'
+        );
+      }
+    } catch (error) {
+      console.error('❌ Resend email error:', error);
+      Alert.alert(
+        '❌ Error', 
+        'An unexpected error occurred. Please try again later.'
+      );
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#f7f5f0" />
     <GreetingHeader name={userName} image={userImage} />
+      
+      {/* Email Verification Banner */}
+      <EmailVerificationBanner onResendEmail={handleResendEmail} />
       
       {/* Categories - Outside ScrollView */}
       <View style={styles.categoryWrapper}>
@@ -219,7 +328,14 @@ export default function HomeScreen() {
         style={styles.scrollView}
       >
       <View style={styles.sectionHeader}>
+        <View style={{ flex: 1 }}>
         <Text style={styles.sectionTitle}>Recommended For You</Text>
+          {isPersonalized && dietaryPrefs && (
+            <Text style={{ fontSize: 12, color: '#10b981', fontWeight: '500', marginTop: 2 }}>
+              🎯 Personalized for {dietaryPrefs.healthGoal.replace('_', ' ')} • {dietaryPrefs.dietaryRestrictions.join(', ')}
+            </Text>
+          )}
+        </View>
         <TouchableOpacity onPress={() => router.push('/meal/recommended')}>
           <Text style={styles.seeAll}>See All</Text>
         </TouchableOpacity>

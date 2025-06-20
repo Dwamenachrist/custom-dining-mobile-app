@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors } from '../theme/colors';
 import { useAuth } from '../auth-context';
 import { Button } from '../components/Button';
+import { getHybridRestaurants } from '../services/hybridMealService';
 
 interface Restaurant {
   id: string;
@@ -20,69 +21,19 @@ interface Restaurant {
 const FILTER_TAGS = ['Low-Carb', 'Sugar-Free', 'Vegan Friendly', 'Diabetic-Friendly'];
 const SORT_OPTIONS = ['Recommended', 'Top Rated', 'Near You', 'Recent'];
 
-// Enhanced restaurant data with mock API integration
-const ALL_RESTAURANTS: Restaurant[] = [
-  {
-    id: '1',
-    name: 'Health n Healthy',
-    image: require('../assets/restaurant-logo.png'),
-    tags: ['Vegan', 'Diabetic-Friendly'],
-    distance: '0.8 km',
-    rating: 4.8,
-    reviewCount: 245,
-    deliveryTime: '15-25 min'
-  },
-  {
-    id: '2',
-    name: 'So Fresh',
-    image: require('../assets/restaurant1.png'),
-    tags: ['Low-Carb', 'Sugar-Free'],
-    distance: '1.2 km',
-    rating: 4.6,
-    reviewCount: 189,
-    deliveryTime: '20-30 min'
-  },
-  {
-    id: '3',
-    name: 'Addys Health Kitchen',
-    image: require('../assets/restaurant2.png'),
-    tags: ['Vegan', 'Low-Carb'],
-    distance: '1.5 km',
-    rating: 4.7,
-    reviewCount: 312,
-    deliveryTime: '18-28 min'
-  },
-  {
-    id: '4',
-    name: 'Green Grill Restaurant',
-    image: require('../assets/restaurant3.png'),
-    tags: ['Vegan', 'Sugar-Free'],
-    distance: '2.1 km',
-    rating: 4.5,
-    reviewCount: 156,
-    deliveryTime: '25-35 min'
-  },
-  {
-    id: '5',
-    name: 'Pure Plate Kitchen',
-    image: require('../assets/restaurant1.png'),
-    tags: ['Diabetic-Friendly', 'Low-Carb'],
-    distance: '1.8 km',
-    rating: 4.9,
-    reviewCount: 278,
-    deliveryTime: '20-30 min'
-  },
-  {
-    id: '6',
-    name: 'Fresh Garden Bistro',
-    image: require('../assets/restaurant2.png'),
-    tags: ['Vegan Friendly', 'Sugar-Free'],
-    distance: '2.3 km',
-    rating: 4.4,
-    reviewCount: 198,
-    deliveryTime: '30-40 min'
-  }
-];
+// Convert hybrid restaurant to display format
+const convertHybridRestaurant = (hybridRestaurant: any): Restaurant => {
+  return {
+    id: hybridRestaurant.restaurantId,
+    name: hybridRestaurant.restaurantName,
+    image: hybridRestaurant.image,
+    tags: [hybridRestaurant.cuisineType || 'Restaurant'],
+    distance: '2.0 km', // Default since backend doesn't provide
+    rating: hybridRestaurant.rating || 4.5,
+    reviewCount: hybridRestaurant.reviewCount || 100,
+    deliveryTime: hybridRestaurant.deliveryTime || '25-35 min'
+  };
+};
 
 export default function RestaurantsListScreen() {
   const router = useRouter();
@@ -90,15 +41,44 @@ export default function RestaurantsListScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [activeSortOption, setActiveSortOption] = useState('Recommended');
-  const [restaurants, setRestaurants] = useState<Restaurant[]>(ALL_RESTAURANTS);
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [allRestaurants, setAllRestaurants] = useState<Restaurant[]>([]);
   const [showMore, setShowMore] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadRestaurants();
+  }, []);
 
   useEffect(() => {
     filterRestaurants();
-  }, [searchQuery, activeFilters, activeSortOption]);
+  }, [searchQuery, activeFilters, activeSortOption, allRestaurants]);
+
+  const loadRestaurants = async () => {
+    try {
+      setLoading(true);
+      console.log('🌐 Loading restaurants from hybrid service...');
+      
+      const response = await getHybridRestaurants();
+      
+      if (response.success && response.data && response.data.length > 0) {
+        console.log('✅ Loaded restaurants from hybrid service!');
+        const convertedRestaurants = response.data.map(convertHybridRestaurant);
+        setAllRestaurants(convertedRestaurants);
+      } else {
+        console.log('⚠️ No restaurants available from hybrid service');
+        setAllRestaurants([]);
+      }
+    } catch (error) {
+      console.error('❌ Error loading restaurants:', error);
+      setAllRestaurants([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filterRestaurants = () => {
-    let filtered = ALL_RESTAURANTS;
+    let filtered = allRestaurants;
 
     // Apply search filter
     if (searchQuery.trim()) {
@@ -140,9 +120,21 @@ export default function RestaurantsListScreen() {
   };
 
   const handleRestaurantPress = (restaurant: Restaurant) => {
-    // Navigate to restaurant profile
+    // Navigate to restaurant profile with complete data
     console.log('Navigate to restaurant:', restaurant.name);
-    router.push(`/restaurant-profile?id=${restaurant.id}&name=${restaurant.name}`);
+    router.push({
+      pathname: '/restaurant-profile',
+      params: {
+        id: restaurant.id,
+        name: restaurant.name,
+        rating: restaurant.rating.toString(),
+        reviewCount: restaurant.reviewCount.toString(),
+        imageSource: JSON.stringify(restaurant.image),
+        tags: JSON.stringify(restaurant.tags),
+        distance: restaurant.distance,
+        deliveryTime: restaurant.deliveryTime
+      }
+    });
   };
 
   const displayedRestaurants = showMore ? restaurants : restaurants.slice(0, 4);

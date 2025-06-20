@@ -1,9 +1,14 @@
-import React, { useState, useEffect } from 'react';
+﻿// Updated dinner.tsx - Complete Order Now and Add to Plan functionality
+
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors } from '../theme/colors';
 import { useAuth } from '../auth-context';
+import { useCart } from '../cart-context';
+import MealPlanService from '../services/mealPlanService';
+import MealPlanToast from '../components/MealPlanToast';
 
 interface Meal {
   id: string;
@@ -19,70 +24,74 @@ interface Meal {
 const DINNER_MEALS: Meal[] = [
   {
     id: '1',
-    name: 'Grilled Salmon',
-    description: 'Atlantic salmon grilled to perfection with herbs and lemon',
-    image: require('../assets/recommendation1.png'),
-    tags: ['High Protein', 'Omega-3'],
-    calories: '480 Cal Per Serving',
-    rating: 4.9,
+    name: 'Beans and Potato',
+    description: 'Protein-rich beans cooked with tender potatoes in a savory sauce',
+    image: require('../assets/meals/Beans and Potato.png'),
+    tags: ['High-Protein', 'Vegan'],
+    calories: '380 Cal Per Serving',
+    rating: 4.5,
     price: 3500
   },
   {
     id: '2',
-    name: 'Beef Steak & Veggies',
-    description: 'Tender beef steak served with roasted seasonal vegetables',
-    image: require('../assets/recommendation2.png'),
-    tags: ['High Protein', 'Iron Rich'],
-    calories: '520 Cal Per Serving',
-    rating: 4.8,
-    price: 4200
+    name: 'Plantain and Soup',
+    description: 'Sweet plantain served with traditional Nigerian soup',
+    image: require('../assets/meals/Plantain and Soup.png'),
+    tags: ['Traditional', 'Comfort-Food'],
+    calories: '420 Cal Per Serving',
+    rating: 4.6,
+    price: 4000
   },
   {
     id: '3',
-    name: 'Vegetarian Pasta',
-    description: 'Whole grain pasta with roasted vegetables in tomato sauce',
-    image: require('../assets/recommendation3.png'),
-    tags: ['Vegetarian', 'High Fiber'],
-    calories: '420 Cal Per Serving',
-    rating: 4.6,
-    price: 2800
+    name: 'Sauce and Yam',
+    description: 'Boiled yam served with rich tomato and pepper sauce',
+    image: require('../assets/meals/Sauce and Yam.png'),
+    tags: ['Traditional', 'Filling'],
+    calories: '450 Cal Per Serving',
+    rating: 4.4,
+    price: 3800
   },
   {
     id: '4',
-    name: 'Chicken Teriyaki',
-    description: 'Marinated chicken breast glazed with homemade teriyaki',
-    image: require('../assets/recommendation1.png'),
-    tags: ['High Protein', 'Asian'],
-    calories: '450 Cal Per Serving',
-    rating: 4.7,
+    name: 'Unripe Plantain Porridge',
+    description: 'Nutritious unripe plantain cooked in a flavorful broth',
+    image: require('../assets/meals/Unripe Plantain porridge.png'),
+    tags: ['Healthy', 'Traditional'],
+    calories: '350 Cal Per Serving',
+    rating: 4.3,
     price: 3200
   },
   {
     id: '5',
-    name: 'Stuffed Bell Peppers',
-    description: 'Bell peppers stuffed with quinoa, vegetables and cheese',
-    image: require('../assets/recommendation2.png'),
-    tags: ['Vegetarian', 'Low-Carb'],
-    calories: '380 Cal Per Serving',
-    rating: 4.5,
-    price: 2600
+    name: 'Veggie Sauce and Yam',
+    description: 'Fresh vegetable sauce served with boiled yam',
+    image: require('../assets/meals/Veggie Sauce and Yam.png'),
+    tags: ['Vegan', 'Nutritious'],
+    calories: '320 Cal Per Serving',
+    rating: 4.7,
+    price: 3600
   },
   {
     id: '6',
-    name: 'Fish & Chips (Healthy)',
-    description: 'Baked white fish with sweet potato fries and mushy peas',
-    image: require('../assets/recommendation3.png'),
-    tags: ['Balanced', 'Comfort Food'],
-    calories: '460 Cal Per Serving',
+    name: 'Plantain and Egg Sauce',
+    description: 'Sweet fried plantain served with scrambled eggs in tomato and pepper sauce',
+    image: require('../assets/meals/Plantain and Egg sauce.png'),
+    tags: ['Comfort-Food', 'High-Protein'],
+    calories: '380 Cal Per Serving',
     rating: 4.4,
-    price: 3000
+    price: 4500
   }
 ];
 
 export default function DinnerScreen() {
   const router = useRouter();
   const { isLoggedIn } = useAuth();
+  const { addToCart } = useCart();
   const [selectedSort, setSelectedSort] = useState('Most Popular');
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'cart'>('success');
 
   const handleMealPress = (meal: Meal) => {
     router.push({
@@ -93,17 +102,36 @@ export default function DinnerScreen() {
         description: meal.description,
         price: meal.price.toString(),
         calories: meal.calories,
+        imageSource: JSON.stringify(meal.image),
         tags: JSON.stringify(meal.tags)
       }
     });
   };
 
-  const handleAddToPlan = (meal: Meal) => {
+  const handleAddToPlan = async (meal: Meal) => {
     if (!isLoggedIn) {
       router.push('/(auth)/customer-login');
       return;
     }
-    console.log('Adding to plan:', meal.name);
+    
+    try {
+      const result = await MealPlanService.addMealToPlan(meal, 'Dinner');
+      
+      if (result.success) {
+        setToastVisible(true);
+        setToastMessage(result.message);
+        setToastType('success');
+      } else {
+        setToastVisible(true);
+        setToastMessage(result.message);
+        setToastType('error');
+      }
+    } catch (error) {
+      console.error(' Error adding meal to plan:', error);
+      setToastVisible(true);
+      setToastMessage('Failed to add meal to plan. Please try again.');
+      setToastType('error');
+    }
   };
 
   const handleOrder = (meal: Meal) => {
@@ -111,7 +139,22 @@ export default function DinnerScreen() {
       router.push('/(auth)/customer-login');
       return;
     }
-    console.log('Ordering:', meal.name);
+    
+    // Add to cart
+    addToCart({
+      id: meal.id,
+      name: meal.name,
+      price: meal.price,
+      image: meal.image,
+      restaurant: 'Restaurant'
+    });
+    
+    // Show cart toast
+    setToastVisible(true);
+    setToastMessage(`${meal.name} added to cart!`);
+    setToastType('cart');
+    
+    console.log('Added to cart:', meal.name);
   };
 
   return (
@@ -204,6 +247,16 @@ export default function DinnerScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      
+      {/* Toast Component */}
+      <MealPlanToast
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        onHide={() => setToastVisible(false)}
+        actionText={toastType === 'cart' ? 'View Cart' : undefined}
+        onActionPress={toastType === 'cart' ? () => router.push('/(customer-tabs)/order') : undefined}
+      />
     </SafeAreaView>
   );
 }
@@ -280,6 +333,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: 16,
     padding: 4,
+  },
+  cardContent: {
+    flexDirection: 'row',
+    gap: 12,
   },
   mealImage: {
     width: 80,
@@ -379,9 +436,4 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '600',
   },
-  cardContent: {
-    flexDirection: 'row',
-    gap: 12,
-  },
 });
-

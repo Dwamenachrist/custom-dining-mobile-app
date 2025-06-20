@@ -1,5 +1,4 @@
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { TabBarIcon } from '../../components/TabBarIcon';
 import CustomTabBar from '../../components/CustomTabBar';

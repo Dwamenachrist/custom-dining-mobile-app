@@ -1,240 +1,291 @@
-import React from 'react';
-import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, StatusBar, SafeAreaView } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import React, { useState, useEffect } from 'react';
+import { View, Text, Image, ScrollView, TouchableOpacity, StatusBar, SafeAreaView, ActivityIndicator } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { getAllMeals, Meal as BackendMeal } from '../../services/api';
+import { getHybridMealById } from '../../services/hybridMealService';
+import { useCart } from '../../cart-context';
+import { CartToast } from '../../components/CartToast';
 
-const MEALS = [
-  {
-    id: 1,
-    title: 'Fruity Oats delight',
-    image: require('../../assets/breakfast.png'),
-    description: "A nourishing bowl of rolled oats topped with fresh bananas, blueberries, and seeds. Served warm with almond milk. Perfect for starting your day right—no added sugar, just natural sweetness.",
-    tags: ['Low-Carb', 'Sugar-Free', 'High Fiber', 'Vegan'],
-    price: 5000,
-    available: true,
-    nutrition: [
-      { label: 'Calories', value: '310 kcal' },
-      { label: 'Total Carbohydrates', value: '38 g' },
-      { label: 'Sugars (Natural)', value: '10 g' },
-      { label: 'Fiber', value: '6 g' },
-      { label: 'Fats', value: '8 g' },
-      { label: 'Sodium', value: '90 mg' },
-    ],
-  },
-  // Add more meals as needed
-];
+// Interface for displaying meal details
+interface MealDetail {
+  id: string;  // Changed to string to match backend
+  name: string;
+  description: string;
+  dietaryTags: string[];
+  nutritionalInfo: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    fiber?: number;
+    sodium?: number;
+    sugars?: number;
+  };
+  allergens: string[];
+  restaurantId: string | null;
+  restaurant: string;
+  image: any;
+  price: number;
+  available: boolean;
+}
 
-export default function MealDetail() {
-  const { id } = useLocalSearchParams();
-  const meal = MEALS.find((m) => m.id === Number(id));
+export default function MealDetailScreen() {
+  const router = useRouter();
+  const { id, name, description, price, calories, imageSource, tags, restaurant, restaurantId, restaurantName } = useLocalSearchParams();
+  const { addToCart } = useCart();
+  const [meal, setMeal] = useState<MealDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [showToast, setShowToast] = useState(false);
 
-  if (!meal) {
+  useEffect(() => {
+    fetchMealDetails();
+  }, [id]);
+
+  const fetchMealDetails = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      // First try to get meal from hybrid service
+      console.log('🍽️ Fetching meal details from hybrid service for ID:', id);
+      const response = await getHybridMealById(id as string);
+      
+      if (response.success && response.data) {
+        const foundMeal = response.data;
+        
+        const mealDetail: MealDetail = {
+          id: foundMeal.id,
+          name: foundMeal.name,
+          description: foundMeal.description,
+          dietaryTags: foundMeal.dietaryTags,
+          nutritionalInfo: {
+            calories: foundMeal.nutritionalInfo?.calories || 400,
+            protein: foundMeal.nutritionalInfo?.protein || 20,
+            carbs: foundMeal.nutritionalInfo?.carbs || 30,
+            fat: foundMeal.nutritionalInfo?.fat || 15,
+            fiber: foundMeal.nutritionalInfo?.fiber || 5,
+            sodium: foundMeal.nutritionalInfo?.sodium || 2000,
+            sugars: foundMeal.nutritionalInfo?.sugars || 30
+          },
+          allergens: foundMeal.allergens,
+          restaurantId: foundMeal.restaurantId,
+          restaurant: foundMeal.restaurant?.name || `Restaurant ${foundMeal.restaurantId || 'Unknown'}`,
+          image: foundMeal.image || { uri: 'https://via.placeholder.com/320x220/758F76/FFFFFF?text=No+Image' },
+          price: parseFloat(foundMeal.price) || 3000,
+          available: foundMeal.isAvailable === 1
+        };
+        
+        setMeal(mealDetail);
+        console.log('✅ Loaded meal details from hybrid service!');
+      } else if (name && description && price) {
+        // Fallback to parameters passed from navigation
+        console.log('🔄 Using meal data from navigation parameters...');
+        
+        const mealDetail: MealDetail = {
+          id: id as string,
+          name: name as string,
+          description: description as string,
+          dietaryTags: tags ? JSON.parse(tags as string) : [],
+          nutritionalInfo: {
+            calories: calories ? parseInt(calories as string) : 400,
+            protein: 20,
+            carbs: 30,
+            fat: 15,
+            fiber: 5,
+            sodium: 2000,
+            sugars: 30
+          },
+          allergens: [],
+          restaurantId: restaurantId as string || null,
+          restaurant: restaurant as string || restaurantName as string || 'Restaurant',
+          image: imageSource ? JSON.parse(imageSource as string) : { uri: 'https://via.placeholder.com/320x220/758F76/FFFFFF?text=No+Image' },
+          price: parseFloat(price as string) || 3000,
+          available: true
+        };
+        
+        setMeal(mealDetail);
+        console.log('✅ Loaded meal details from navigation parameters!');
+      } else {
+        setError('Meal not found');
+      }
+    } catch (err: any) {
+      console.error('❌ Error fetching meal details:', err);
+      setError('Failed to load meal details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddToCart = () => {
+    if (meal) {
+      addToCart(meal);
+      setShowToast(true);
+    }
+  };
+
+  if (loading) {
     return (
-      <View style={styles.centered}>
-        <Text>Meal not found.</Text>
+      <View className="flex-1 bg-[#f7f5f0] justify-center items-center">
+        <ActivityIndicator size="large" color="#10b981" />
+        <Text className="text-gray-600 mt-4">Loading meal details...</Text>
       </View>
     );
   }
 
-  const handleOrderNow = () => {
-    router.push('/checkout');
-  };
+  if (error || !meal) {
+    return (
+      <View className="flex-1 bg-[#f7f5f0] justify-center items-center px-5">
+        <Ionicons name="warning" size={48} color="#ef4444" />
+        <Text className="text-red-600 text-center mt-4 text-lg font-semibold">Error</Text>
+        <Text className="text-red-500 text-center mt-2">{error || 'Meal not found'}</Text>
+        <TouchableOpacity 
+          onPress={fetchMealDetails}
+          className="bg-green-600 px-6 py-3 rounded-xl mt-4"
+        >
+          <Text className="text-white font-semibold">Retry</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          onPress={() => router.back()}
+          className="mt-4"
+        >
+          <Text className="text-green-600 font-semibold">Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#f7f5f0" />
-      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 32 }}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <MaterialIcons name="arrow-back" size={24} color="#222" />
+    <SafeAreaView className="flex-1 bg-[#f7f5f0]">
+      <StatusBar barStyle="dark-content" backgroundColor="#f7f5f0" />
+      
+      {/* Cart Toast Notification */}
+      <CartToast 
+        visible={showToast}
+        mealName={meal.name}
+        onClose={() => setShowToast(false)}
+      />
+      
+      {/* Header */}
+      <View className="flex-row items-center justify-between px-5 pt-12 pb-4">
+        <TouchableOpacity onPress={() => router.back()} className="p-2">
+          <Ionicons name="arrow-back" size={24} color="#22223B" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Meal Detail</Text>
-          <View style={{ width: 24 }} />
-        </View>
-        
-        <View style={styles.imageContainer}>
-          <Image source={meal.image} style={styles.mealImage} resizeMode="cover" />
-        </View>
+        <Text className="text-lg font-semibold text-gray-900">Meal Detail</Text>
+        <View className="w-8" />
+      </View>
 
-        <Text style={styles.mealTitle}>{meal.title}</Text>
+      {/* Fixed Content - Image, Title, Description, Tags, Price */}
+      <View className="px-5">
+        {/* Meal Image Container */}
+        <View 
+          className="mb-6 overflow-hidden items-center justify-center"
+          style={{
+            width: 350,
+            height: 260,
+            borderRadius: 16,
+            backgroundColor: '#758F76'
+          }}
+        >
+          <Image 
+            source={meal.image} 
+            style={{
+              width: 320,
+              height: 220,
+              borderRadius: 12,
+            }}
+            resizeMode="cover"
+          />
+        </View>
         
-        <Text style={styles.sectionLabel}>Description</Text>
-        <Text style={styles.description}>{meal.description}</Text>
+        {/* Meal Title and Restaurant */}
+        <View className="flex-row flex-wrap mb-2">
+          <Text className="text-xl font-bold" style={{ color: '#2f7d52' }}>
+            {meal.name.split(' ')[0]}
+          </Text>
+          {meal.name.split(' ').length > 1 && (
+            <Text className="text-xl font-bold text-gray-900 ml-1">
+              {meal.name.split(' ').slice(1).join(' ')}
+            </Text>
+          )}
+        </View>
+        <Text className="text-sm text-gray-600 mb-4">{meal.restaurant}</Text>
         
-        <View style={styles.tagRow}>
-          {meal.tags.map((tag) => (
-            <View key={tag} style={styles.tag}>
-              <Text style={styles.tagText}>{tag}</Text>
+        {/* Description */}
+        <Text className="text-sm font-semibold text-gray-900 mb-2">Description</Text>
+        <Text className="text-sm text-gray-600 leading-5 mb-6">{meal.description}</Text>
+        
+        {/* Tags */}
+        <View className="flex-row flex-wrap gap-2 mb-6">
+          {meal.dietaryTags.map((tag, index) => (
+            <View key={index} className="bg-green-100 px-3 py-1 rounded-full">
+              <Text className="text-green-700 text-xs font-medium">{tag}</Text>
             </View>
           ))}
         </View>
 
-        <View style={styles.priceRow}>
-          <Text style={styles.price}>#{meal.price.toLocaleString()}</Text>
-          <Text style={styles.available}>{meal.available ? 'Available' : 'Unavailable'}</Text>
+        {/* Price and Availability */}
+        <View className="flex-row items-center justify-between mb-4">
+          <Text className="text-lg font-bold text-gray-900">₦{meal.price.toLocaleString()}</Text>
+          <Text className="text-sm text-green-600 font-medium">
+            {meal.available ? 'Available' : 'Unavailable'}
+          </Text>
         </View>
 
-        <Text style={styles.sectionLabel}>Nutrition Info</Text>
-        <View style={styles.nutritionCard}>
-          {meal.nutrition.map((item) => (
-            <View key={item.label} style={styles.nutritionRow}>
-              <Text style={styles.nutritionLabel}>{item.label}</Text>
-              <Text style={styles.nutritionValue}>{item.value}</Text>
-            </View>
-          ))}
-        </View>
+        {/* Nutrition Info Header */}
+        <Text className="text-sm font-semibold text-gray-900 mb-3">Nutrition info</Text>
+      </View>
 
-        <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.addButton}>
-            <Text style={styles.addButtonText}>Add to Plan</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.orderButton} onPress={handleOrderNow}>
-            <Text style={styles.orderButtonText}>Order Now</Text>
-          </TouchableOpacity>
+      {/* Scrollable Nutrition Info Section */}
+      <ScrollView 
+        className="flex-1 px-5" 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 20 }}
+      >
+        <View className="bg-white rounded-xl p-4">
+          <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
+            <Text className="text-sm text-gray-600">Calories</Text>
+            <Text className="text-sm text-gray-900 font-medium">{meal.nutritionalInfo.calories} kcal</Text>
+          </View>
+          <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
+            <Text className="text-sm text-gray-600">Total Carbohydrates</Text>
+            <Text className="text-sm text-gray-900 font-medium">{meal.nutritionalInfo.carbs} g</Text>
+          </View>
+          <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
+            <Text className="text-sm text-gray-600">Protein</Text>
+            <Text className="text-sm text-gray-900 font-medium">{meal.nutritionalInfo.protein} g</Text>
+          </View>
+          <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
+            <Text className="text-sm text-gray-600">Fiber</Text>
+            <Text className="text-sm text-gray-900 font-medium">{meal.nutritionalInfo.fiber} g</Text>
+          </View>
+          <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
+            <Text className="text-sm text-gray-600">Fats</Text>
+            <Text className="text-sm text-gray-900 font-medium">{meal.nutritionalInfo.fat} g</Text>
+          </View>
+          <View className="flex-row justify-between items-center py-2">
+            <Text className="text-sm text-gray-600">Sodium</Text>
+            <Text className="text-sm text-gray-900 font-medium">{meal.nutritionalInfo.sodium} mg</Text>
+          </View>
+          <View className="flex-row justify-between items-center py-2">
+            <Text className="text-sm text-gray-600">Sugars</Text>
+            <Text className="text-sm text-gray-900 font-medium">{meal.nutritionalInfo.sugars} g</Text>
+          </View>
         </View>
       </ScrollView>
+
+      {/* Fixed Action Buttons at Bottom */}
+      <View className="px-5 pb-6 pt-4 bg-[#f7f5f0]">
+        <View className="flex-row gap-3">
+          <TouchableOpacity 
+            onPress={handleAddToCart}
+            className="flex-1 bg-green-600 py-4 rounded-xl items-center"
+          >
+            <Text className="text-white font-semibold text-sm">Add to Cart</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#f7f5f0',
-    marginTop: 20,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#f7f5f0',
-    paddingHorizontal: 16,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 48,
-    marginBottom: 16,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#222',
-  },
-  imageContainer: {
-    width: '100%',
-    height: 200,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-  },
-  mealImage: {
-    width: '100%',
-    height: '100%',
-  },
-  mealTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 16,
-    color: '#222',
-  },
-  sectionLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#222',
-    marginBottom: 8,
-  },
-  description: {
-    color: '#666',
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  tagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-  tag: {
-    backgroundColor: '#E8F5E9',
-    borderRadius: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  tagText: {
-    color: '#2E7D32',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    gap: 12,
-  },
-  price: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#222',
-  },
-  available: {
-    color: '#2E7D32',
-    fontSize: 14,
-  },
-  nutritionCard: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    marginTop: 8,
-    marginBottom: 24,
-  },
-  nutritionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F5F5F5',
-  },
-  nutritionLabel: {
-    color: '#444',
-    fontSize: 14,
-  },
-  nutritionValue: {
-    color: '#222',
-    fontSize: 14,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  addButton: {
-    flex: 1,
-    backgroundColor: '#2E7D32',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  addButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  orderButton: {
-    flex: 1,
-    backgroundColor: '#FDD835',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  orderButtonText: {
-    color: '#222',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-}); 

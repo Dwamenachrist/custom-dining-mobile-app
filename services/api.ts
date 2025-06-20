@@ -28,20 +28,31 @@ export interface User {
 
 // Meal types - matching backend structure
 export interface Meal {
-  id: number;
+  id: string;  // Backend uses string IDs, not numbers
   name: string;
   description: string;
-  dietaryTags: string[];
-  nutritionalInfo: {
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-  };
-  allergens: string[];
-  restaurantId: string | null;
+  price: string;  // Backend returns price as string
+  isAvailable: number;  // Backend uses 1/0 for boolean
+  restaurantId: string;
   createdAt: string;
   updatedAt: string;
+  dietaryTags: string[];
+  allergens: string[];
+  nutritionalInfo: {
+    calories?: number;
+    protein?: number;
+    carbs?: number;
+    fat?: number;
+    sugars?: number;
+    fiber?: number;
+    sodium?: number;
+  };
+  restaurant?: {
+    id: string;
+    name: string;
+    location: string;
+  };
+  image?: any;  // For hybrid meals with local images
 }
 
 // Updated to match backend requirements
@@ -83,6 +94,42 @@ export interface AuthResponse {
   user: User;
   token: string;
   refreshToken?: string;
+}
+
+// Add dietary preference types based on your API
+export interface DietaryPreferences {
+  healthGoal: string;  // e.g., "weight_loss", "muscle_gain", "balanced_nutrition"
+  dietaryRestrictions: string[];  // e.g., ["vegetarian", "gluten-free"]
+  preferredMealTags: string[];   // e.g., ["high-protein", "low-carb"]
+}
+
+// Meal plan builder data structure
+export interface MealPlanData {
+  mealGoal: string;
+  planDuration: string;
+  restrictions: string[];
+  disliked: string;
+  meals: Array<{
+    type: string;
+    name: string;
+    image: any;
+  }>;
+}
+
+// Restaurant types
+export interface Restaurant {
+  restaurantId: string;  // Backend uses 'restaurantId', not 'id'
+  restaurantName: string;  // Backend uses 'restaurantName', not 'name'
+  location: string;
+  cuisineType: string;
+  contactEmail: string;
+  status: string;
+  isActive: boolean;
+  owner: {
+    id: string;
+    username: string;
+    email: string;
+  };
 }
 
 // 📝 STEP 2: Create Axios instance
@@ -227,18 +274,37 @@ class ApiService {
     // Check if it's an Axios error (has response)
     if (error.response) {
       // Server responded with error status
+      const errorData = error.response.data;
+      
+      // Try to extract meaningful error message from various possible backend response formats
+      let message = 'An error occurred';
+      
+      if (typeof errorData === 'string') {
+        message = errorData;
+      } else if (errorData?.message) {
+        message = errorData.message;
+      } else if (errorData?.error) {
+        message = errorData.error;
+      } else if (errorData?.errors && Array.isArray(errorData.errors)) {
+        // Handle validation errors array
+        message = errorData.errors.map((err: any) => 
+          typeof err === 'string' ? err : err.message || err.msg || String(err)
+        ).join(', ');
+      } else {
+        message = `HTTP ${error.response.status}: ${error.response.statusText}`;
+      }
+      
       return {
         success: false,
-        message: error.response.data?.message || 
-                `HTTP ${error.response.status}: ${error.response.statusText}`,
-        error: error.response.data?.error || error.response.statusText,
-        status: error.response.data?.status || 'error',
+        message: message,
+        error: errorData?.error || error.response.statusText,
+        status: errorData?.status || 'error',
       };
     } else if (error.request) {
       // Network error - no response received
       return {
         success: false,
-        message: 'Network error. Please check your connection.',
+        message: 'Network error. Please check your connection and try again.',
         error: 'No response from server',
         status: 'network_error',
       };
@@ -246,7 +312,7 @@ class ApiService {
       // Something else went wrong
       return {
         success: false,
-        message: 'An unexpected error occurred.',
+        message: error.message || 'An unexpected error occurred.',
         error: error.message || 'Unknown error',
         status: 'unknown_error',
       };
@@ -306,22 +372,255 @@ export async function addMealToRestaurant(data: {
   }
 }
 
-// Get all meals for menu snapshot
+// Get all meals from the backend
 export async function getAllMeals(): Promise<ApiResponse<Meal[]>> {
   try {
-    console.log('🍽️ Fetching all meals for menu snapshot');
+    console.log('🍽️ Fetching all meals');
     
-    const response = await api.get<Meal[]>('/meals');
+    const response = await apiClient.get('/meals');
+    
+    // Backend returns: { status: 'success', results: number, data: Meal[] }
+    if (response.data.status === 'success' && response.data.data) {
+      console.log('✅ Meals fetched successfully!', response.data);
+      return {
+        success: true,
+        message: 'Meals fetched successfully',
+        data: response.data.data, // Extract the data array
+      };
+    } else {
+      console.log('⚠️ No meals found in response');
+      return {
+        success: false,
+        message: 'No meals found',
+        data: [],
+      };
+    }
+  } catch (error) {
+    console.error('❌ Get meals error:', error);
+    return {
+      success: false,
+      message: 'Failed to fetch meals',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      data: [],
+    };
+  }
+}
+
+// Get all restaurants from the backend
+export async function getAllRestaurants(): Promise<ApiResponse<Restaurant[]>> {
+  try {
+    console.log('🏪 Fetching all restaurants');
+    
+    const response = await apiClient.get('/restaurants');
+    
+    // Backend returns: { status: 'success', results: number, data: { restaurants: Restaurant[] } }
+    if (response.data.status === 'success' && response.data.data && response.data.data.restaurants) {
+      console.log('✅ Restaurants fetched successfully!', response.data);
+      return {
+        success: true,
+        message: 'Restaurants fetched successfully',
+        data: response.data.data.restaurants, // Extract the restaurants array
+      };
+    } else {
+      console.log('⚠️ No restaurants found in response');
+      return {
+        success: false,
+        message: 'No restaurants found',
+        data: [],
+      };
+    }
+  } catch (error) {
+    console.error('❌ Get restaurants error:', error);
+    return {
+      success: false,
+      message: 'Failed to fetch restaurants',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      data: [],
+    };
+  }
+}
+
+// Get restaurant by ID
+export async function getRestaurantById(restaurantId: string): Promise<ApiResponse<Restaurant>> {
+  try {
+    console.log('🏪 Fetching restaurant by ID:', restaurantId);
+    
+    const response = await api.get<Restaurant>(`/restaurants/${restaurantId}`);
     
     if (response.success) {
-      console.log('✅ Meals fetched successfully!');
+      console.log('✅ Restaurant fetched successfully!');
     }
     
     return response;
   } catch (error) {
-    console.error('❌ Get meals error:', error);
+    console.error('❌ Get restaurant error:', error);
     throw error;
   }
 }
 
-export default ApiService; 
+// Get meals by restaurant ID
+export async function getMealsByRestaurant(restaurantId: string): Promise<ApiResponse<Meal[]>> {
+  try {
+    console.log('🍽️ Fetching meals for restaurant:', restaurantId);
+    
+    const response = await api.get<Meal[]>(`/restaurants/${restaurantId}/meals`);
+    
+    if (response.success) {
+      console.log('✅ Restaurant meals fetched successfully!');
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('❌ Get restaurant meals error:', error);
+    throw error;
+  }
+}
+
+export default ApiService;
+
+// 🥗 DIETARY PREFERENCES API METHODS
+// Based on your backend API documentation
+
+/**
+ * Save user's dietary preferences to backend
+ * POST /api/user/profile
+ */
+export async function saveDietaryPreferences(preferences: DietaryPreferences): Promise<ApiResponse<any>> {
+  try {
+    console.log('🥗 Saving dietary preferences:', preferences);
+    
+    const response = await api.post('/user/profile', preferences);
+    
+    if (response.success) {
+      console.log('✅ Dietary preferences saved successfully!');
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('❌ Save dietary preferences error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get personalized meals for user based on their preferences
+ * GET /api/user/meals
+ */
+export async function getUserMeals(): Promise<ApiResponse<Meal[]>> {
+  try {
+    console.log('🍽️ Fetching personalized meals for user');
+    
+    const response = await api.get<Meal[]>('/user/meals');
+    
+    if (response.success) {
+      console.log('✅ User meals fetched successfully!');
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('❌ Get user meals error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Delete user profile (including dietary preferences)
+ * DELETE /api/user/profile
+ */
+export async function deleteUserProfile(): Promise<ApiResponse<any>> {
+  try {
+    console.log('🗑️ Deleting user profile');
+    
+    const response = await api.delete('/user/profile');
+    
+    if (response.success) {
+      console.log('✅ User profile deleted successfully!');
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('❌ Delete user profile error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Transform meal plan builder data to dietary preferences format
+ * This converts frontend form data to backend API format
+ */
+export function transformMealPlanToDietaryPreferences(mealPlanData: MealPlanData): DietaryPreferences {
+  // Map meal plan data to dietary preferences format
+  return {
+    healthGoal: mealPlanData.mealGoal.toLowerCase().replace(' ', '_'), // e.g., "Weight Loss" -> "weight_loss"
+    dietaryRestrictions: mealPlanData.restrictions, // Already in array format
+    preferredMealTags: [] // You might want to extract this from meal types or other data
+  };
+}
+
+// ===== FAVORITES API =====
+
+// Add meal to favorites
+export async function addMealToFavorites(mealId: string): Promise<ApiResponse<any>> {
+  try {
+    console.log(`🌐 Adding meal ${mealId} to favorites...`);
+    const response = await ApiService.post('/users/favorites', { 
+      mealId: mealId 
+    });
+    
+    if (response.success) {
+      console.log('✅ Meal added to favorites successfully!');
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('❌ Error adding meal to favorites:', error);
+    return {
+      success: false,
+      message: 'Failed to add meal to favorites',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+}
+
+// Get user's favorite meals
+export async function getFavoriteMeals(): Promise<ApiResponse<Meal[]>> {
+  try {
+    console.log('🌐 Fetching user favorite meals...');
+    const response = await ApiService.get<Meal[]>('/users/favorites');
+    
+    if (response.success && response.data) {
+      console.log('✅ Favorite meals fetched successfully!');
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('❌ Error fetching favorite meals:', error);
+    return {
+      success: false,
+      message: 'Failed to fetch favorite meals',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+}
+
+// Remove meal from favorites
+export async function removeMealFromFavorites(mealId: string): Promise<ApiResponse<any>> {
+  try {
+    console.log(`🌐 Removing meal ${mealId} from favorites...`);
+    const response = await ApiService.delete(`/users/favorites/${mealId}`);
+    
+    if (response.success) {
+      console.log('✅ Meal removed from favorites successfully!');
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('❌ Error removing meal from favorites:', error);
+    return {
+      success: false,
+      message: 'Failed to remove meal from favorites',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+}
+

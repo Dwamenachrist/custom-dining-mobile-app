@@ -1,48 +1,129 @@
-import React from 'react';
+﻿import React, { useState } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, SafeAreaView, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors } from '../theme/colors';
 import { useAuth } from '../auth-context';
+import { useCart } from '../cart-context';
+import MealPlanService from '../services/mealPlanService';
+import MealPlanToast from '../components/MealPlanToast';
 
 export default function MenuScreen() {
   const router = useRouter();
   const { isLoggedIn } = useAuth();
+  const { addToCart } = useCart();
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'cart'>('success');
 
   const menuItems = [
     {
-      id: 1,
+      id: '1',
       name: 'Basmati Jollof Rice',
-      description: 'Basmati rice with grilled chicken and fresh veggies',
-      calories: '700 Cal Per Serving',
-      image: require('../assets/recommendation1.png'),
-      tags: ['Low-Carb', 'Diabetic-Friendly'],
+      description: 'Premium basmati rice cooked in rich tomato sauce with Nigerian spices',
+      calories: '520 Cal Per Serving',
+      image: require('../assets/meals/Basmati Jollof Rice.png'),
+      tags: ['Traditional', 'Gluten-Free'],
+      price: 8500
     },
     {
-      id: 2,
+      id: '2',
       name: 'Fruity Oats Delight',
-      description: 'A delightful bowl of oats topped with mixed fruits',
-      calories: '450 Cal Per Serving',
-      image: require('../assets/recommendation2.png'),
+      description: 'A nourishing bowl of rolled oats topped with fresh fruits and chia seeds',
+      calories: '310 Cal Per Serving',
+      image: require('../assets/meals/Fruity Oats delight.png'),
       tags: ['Low-Carb', 'Sugar-Free'],
+      price: 5000
     },
     {
-      id: 3,
+      id: '3',
       name: 'Tofu Rice',
-      description: 'A flavorful dish of rice and tender tofu, with freshly diced veggies',
-      calories: '550 Cal Per Serving',
-      image: require('../assets/recommendation3.png'),
-      tags: ['Vegan', 'Diabetic-Friendly'],
+      description: 'Seasoned brown rice served with marinated grilled tofu and vegetables',
+      calories: '390 Cal Per Serving',
+      image: require('../assets/meals/Tofu Rice.png'),
+      tags: ['Vegan', 'High-Protein'],
+      price: 7000
     },
+    {
+      id: '4',
+      name: 'Grilled Fish and Veggies',
+      description: 'Fresh tilapia grilled to perfection with steamed vegetables',
+      calories: '320 Cal Per Serving',
+      image: require('../assets/meals/Grilled Fish and Veggies.png'),
+      tags: ['High-Protein', 'Omega-3'],
+      price: 9500
+    },
+    {
+      id: '5',
+      name: 'Turkey and Salad',
+      description: 'Lean grilled turkey breast served over mixed greens',
+      calories: '280 Cal Per Serving',
+      image: require('../assets/meals/Turkey and Salad.png'),
+      tags: ['High-Protein', 'Low-Carb'],
+      price: 8000
+    }
   ];
 
   const filterTags = ['Low-Carb', 'Sugar-Free', 'Vegan Friendly', 'Diabetic-Friendly'];
+
+  const handleOrder = (item: any) => {
+    if (!isLoggedIn) {
+      router.push('/(auth)/customer-login');
+      return;
+    }
+    
+    addToCart({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      image: item.image,
+      restaurant: 'Restaurant'
+    });
+    
+    setToastVisible(true);
+    setToastMessage(`${item.name} added to cart!`);
+    setToastType('cart');
+  };
+
+  const handleAddToPlan = async (item: any) => {
+    if (!isLoggedIn) {
+      router.push('/(auth)/customer-login');
+      return;
+    }
+    
+    try {
+      const result = await MealPlanService.addMealToPlan({
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        image: item.image,
+        tags: item.tags,
+        calories: item.calories,
+        price: item.price,
+        restaurant: 'Restaurant'
+      });
+      
+      if (result.success) {
+        setToastVisible(true);
+        setToastMessage(result.message);
+        setToastType('success');
+      } else {
+        setToastVisible(true);
+        setToastMessage(result.message);
+        setToastType('error');
+      }
+    } catch (error) {
+      console.error('Error adding meal to plan:', error);
+      setToastVisible(true);
+      setToastMessage('Failed to add meal to plan. Please try again.');
+      setToastType('error');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
       
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.black} />
@@ -51,7 +132,6 @@ export default function MenuScreen() {
       </View>
 
       <ScrollView style={styles.scrollContainer}>
-        {/* Filter Tags */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
           {filterTags.map((tag, index) => (
             <TouchableOpacity key={index} style={styles.filterTag}>
@@ -60,7 +140,6 @@ export default function MenuScreen() {
           ))}
         </ScrollView>
 
-        {/* Sort Section */}
         <View style={styles.sortContainer}>
           <Text style={styles.sortText}>Sort by</Text>
           <TouchableOpacity style={styles.sortButton}>
@@ -69,7 +148,6 @@ export default function MenuScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Menu Items */}
         <View style={styles.menuItems}>
           {menuItems.map((item) => (
             <View key={item.id} style={styles.menuItem}>
@@ -89,10 +167,16 @@ export default function MenuScreen() {
                   ))}
                 </View>
                 <View style={styles.actionButtons}>
-                  <TouchableOpacity style={styles.orderButton}>
+                  <TouchableOpacity 
+                    style={styles.orderButton}
+                    onPress={() => handleOrder(item)}
+                  >
                     <Text style={styles.orderButtonText}>Order</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.addToPlanButton}>
+                  <TouchableOpacity 
+                    style={styles.addToPlanButton}
+                    onPress={() => handleAddToPlan(item)}
+                  >
                     <Text style={styles.addToPlanButtonText}>Add to Plan</Text>
                   </TouchableOpacity>
                 </View>
@@ -101,6 +185,15 @@ export default function MenuScreen() {
           ))}
         </View>
       </ScrollView>
+      
+      <MealPlanToast
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        onHide={() => setToastVisible(false)}
+        actionText={toastType === 'cart' ? 'View Cart' : undefined}
+        onActionPress={toastType === 'cart' ? () => router.push('/(customer-tabs)/order') : undefined}
+      />
     </SafeAreaView>
   );
 }
@@ -177,20 +270,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: colors.white,
     borderRadius: 12,
-    marginBottom: 16,
     padding: 12,
+    marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
   menuItemImage: {
-    width: 100,
-    height: 100,
+    width: 80,
+    height: 80,
     borderRadius: 8,
   },
   menuItemContent: {
@@ -264,4 +354,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-}); 
+});

@@ -67,7 +67,7 @@ export const Button = forwardRef<View, ButtonProps>(
           ${buttonClass} 
           rounded-xl 
           shadow-sm 
-          p-4 
+          px-8 py-4
           ${className}
           ${isDisabled ? 'opacity-60' : 'active:opacity-80'}
         `}
@@ -98,6 +98,8 @@ Button.displayName = 'Button';
 const styles = StyleSheet.create({
   button: {
     borderRadius: 12,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,

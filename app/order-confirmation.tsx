@@ -35,7 +35,7 @@ export default function OrderConfirmationScreen() {
         title="Continue Shopping"
         variant="primary"
         style={styles.button}
-        onPress={() => router.replace('/(tabs)/home')} // Go to home or shopping page
+        onPress={() => router.replace('/(customer-tabs)/home' as any)} // Go to home or shopping page
       />
     </View>
   );

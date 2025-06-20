@@ -4,7 +4,6 @@ import { useAuth } from '../../auth-context';
 import { useRouter } from 'expo-router';
 import { Button } from '../../components/Button';
 import { TextInput } from '../../components/TextInput';
-import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import AuthService from '../../services/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -84,19 +83,20 @@ export default function LoginScreen() {
         setIsLoggedIn(true);
         // The RootLayout will automatically redirect to the (tabs) stack.
       } else {
-        // Check if error is related to email verification
-        const errorMessage = response.message || 'Login failed. Please check your credentials.';
-        
-        if (errorMessage.toLowerCase().includes('verify') || 
-            errorMessage.toLowerCase().includes('unverified') ||
-            errorMessage.toLowerCase().includes('verification')) {
-          setError('Please verify your email before logging in. Check your inbox for the verification link.');
-        } else {
-          setError(errorMessage);
-        }
+        // Display the actual backend error message
+        console.log('Backend login error response:', response);
+        setError(response.message || response.error || 'Login failed. Please check your credentials.');
       }
-    } catch (error) {
-      setError('An unexpected error occurred. Please try again.');
+    } catch (error: any) {
+      console.error('Login error:', error);
+      // Check if it's a structured error response
+      if (error.response?.data?.message) {
+        setError(error.response.data.message);
+      } else if (error.message) {
+        setError(error.message);
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -107,15 +107,6 @@ export default function LoginScreen() {
     router.push('/(auth)/forgot-password');
   };
 
-  const handleSocialLogin = (provider: 'google' | 'microsoft' | 'apple') => {
-    console.log(`Login with ${provider}`);
-    // TODO: Implement social authentication
-  };
-
-  const handleLanguageChange = () => {
-    console.log('Language change pressed');
-    // In a real app, this would open a modal or dropdown.
-  };
 
   return (
     <SafeAreaView className="flex-1 bg-lightGray">
@@ -134,9 +125,8 @@ export default function LoginScreen() {
           {/* Logo and Welcome Text */}
           <View className="mb-8">
             <Image
-              source={require('../../assets/Logo.png')}
+              source={require('../../assets/icon.png')}
               className="self-center align-center w-24 h-24 mb-6"
-              
               resizeMode="contain"
             />
             <Text style={{ color: colors.primary }} className="text-3xl font-bold text-black">Welcome Back!</Text>
@@ -196,35 +186,6 @@ export default function LoginScreen() {
             )}
           </View>
 
-          {/* 'Or Continue With' Divider */}
-          <View className="flex-row items-center my-8">
-            <View className="flex-1 h-px bg-gray" />
-            <Text className="mx-4 text-gray">Or Continue With</Text>
-            <View className="flex-1 h-px bg-gray" />
-          </View>
-
-          {/* Social Logins */}
-          <View className="flex-row justify-center space-x-6">
-            <TouchableOpacity 
-              onPress={() => handleSocialLogin('google')} 
-              className="p-3 rounded-full"
-              disabled={isLoading}>
-              <Image source={require('../../assets/google.png')} className="w-6 h-6" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              onPress={() => handleSocialLogin('microsoft')} 
-              className="p-3 rounded-full"
-              disabled={isLoading}>
-              <Image source={require('../../assets/microsoft.png')} className="w-6 h-6" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              onPress={() => handleSocialLogin('apple')} 
-              className="p-3 rounded-full"
-              disabled={isLoading}>
-              <Image source={require('../../assets/apple.png')} className="w-6 h-6" />
-            </TouchableOpacity>
-          </View>
-
           {/* Create Account & Language Selector */}
           <View className="mt-12">
             <View className="flex-row justify-center mb-6">
@@ -235,13 +196,6 @@ export default function LoginScreen() {
                 <Text className="font-bold text-primary">Create an Account!</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity 
-              onPress={handleLanguageChange} 
-              className="flex-row self-center items-center"
-              disabled={isLoading}>
-                <Text className="text-darkGray">English</Text>
-                <Ionicons name="chevron-down" size={16} color={colors.darkGray} />
-            </TouchableOpacity>
           </View>
 
         </ScrollView>

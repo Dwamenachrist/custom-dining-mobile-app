@@ -1,9 +1,14 @@
-import React, { useState, useEffect } from 'react';
+﻿// Updated lunch.tsx - Complete Order Now and Add to Plan functionality
+
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors } from '../theme/colors';
 import { useAuth } from '../auth-context';
+import { useCart } from '../cart-context';
+import MealPlanService from '../services/mealPlanService';
+import MealPlanToast from '../components/MealPlanToast';
 
 interface Meal {
   id: string;
@@ -19,70 +24,74 @@ interface Meal {
 const LUNCH_MEALS: Meal[] = [
   {
     id: '1',
-    name: 'Grilled Chicken Salad',
-    description: 'Fresh mixed greens with perfectly grilled chicken breast',
-    image: require('../assets/recommendation1.png'),
-    tags: ['High Protein', 'Low-Carb'],
+    name: 'Basmati Jollof Rice',
+    description: 'Aromatic basmati rice cooked in a rich tomato and pepper sauce',
+    image: require('../assets/meals/Basmati Jollof Rice.png'),
+    tags: ['Traditional', 'Spicy'],
     calories: '420 Cal Per Serving',
-    rating: 4.8,
-    price: 2500
+    rating: 4.6,
+    price: 4500
   },
   {
     id: '2',
-    name: 'Quinoa Power Bowl',
-    description: 'Nutritious quinoa bowl with roasted vegetables and tahini',
-    image: require('../assets/recommendation2.png'),
-    tags: ['Vegan', 'High Fiber'],
-    calories: '380 Cal Per Serving',
-    rating: 4.6,
-    price: 2200
+    name: 'Grilled Fish and Veggies',
+    description: 'Fresh grilled fish served with seasonal vegetables',
+    image: require('../assets/meals/Grilled Fish and Veggies.png'),
+    tags: ['High-Protein', 'Low-Carb'],
+    calories: '350 Cal Per Serving',
+    rating: 4.7,
+    price: 5500
   },
   {
     id: '3',
-    name: 'Turkey Wrap',
-    description: 'Whole wheat wrap filled with lean turkey and fresh veggies',
-    image: require('../assets/recommendation3.png'),
-    tags: ['High Protein', 'Balanced'],
-    calories: '450 Cal Per Serving',
-    rating: 4.7,
-    price: 2000
+    name: 'Ofada Rice and Sauce',
+    description: 'Local brown rice served with spicy palm oil sauce',
+    image: require('../assets/meals/Ofada Rice and Sauce.png'),
+    tags: ['Traditional', 'Spicy'],
+    calories: '480 Cal Per Serving',
+    rating: 4.5,
+    price: 4000
   },
   {
     id: '4',
-    name: 'Mediterranean Bowl',
-    description: 'Fresh bowl with hummus, olives, cucumber and feta cheese',
-    image: require('../assets/recommendation1.png'),
-    tags: ['Mediterranean', 'Vegetarian'],
-    calories: '390 Cal Per Serving',
-    rating: 4.5,
-    price: 2300
+    name: 'Tofu Rice',
+    description: 'Protein-rich tofu served with seasoned rice',
+    image: require('../assets/meals/Tofu Rice.png'),
+    tags: ['Vegan', 'High-Protein'],
+    calories: '380 Cal Per Serving',
+    rating: 4.4,
+    price: 4200
   },
   {
     id: '5',
-    name: 'Asian Stir Fry',
-    description: 'Colorful vegetables stir-fried with tofu in savory sauce',
-    image: require('../assets/recommendation2.png'),
-    tags: ['Vegan', 'Asian'],
-    calories: '360 Cal Per Serving',
-    rating: 4.9,
-    price: 2100
+    name: 'Turkey and Salad',
+    description: 'Lean turkey breast with fresh garden salad',
+    image: require('../assets/meals/Turkey and Salad.png'),
+    tags: ['High-Protein', 'Low-Carb'],
+    calories: '320 Cal Per Serving',
+    rating: 4.6,
+    price: 5000
   },
   {
     id: '6',
-    name: 'Salmon & Rice',
-    description: 'Grilled salmon served with brown rice and steamed broccoli',
-    image: require('../assets/recommendation3.png'),
-    tags: ['High Protein', 'Omega-3'],
-    calories: '520 Cal Per Serving',
+    name: 'Avocado Veggie Bowl',
+    description: 'Fresh avocado with mixed vegetables and quinoa',
+    image: require('../assets/meals/Avocado Veggie Bowl.png'),
+    tags: ['Vegan', 'Healthy-Fats'],
+    calories: '360 Cal Per Serving',
     rating: 4.8,
-    price: 2800
+    price: 4000
   }
 ];
 
 export default function LunchScreen() {
   const router = useRouter();
   const { isLoggedIn } = useAuth();
+  const { addToCart } = useCart();
   const [selectedSort, setSelectedSort] = useState('Most Popular');
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'cart'>('success');
 
   const handleMealPress = (meal: Meal) => {
     router.push({
@@ -93,17 +102,36 @@ export default function LunchScreen() {
         description: meal.description,
         price: meal.price.toString(),
         calories: meal.calories,
+        imageSource: JSON.stringify(meal.image),
         tags: JSON.stringify(meal.tags)
       }
     });
   };
 
-  const handleAddToPlan = (meal: Meal) => {
+  const handleAddToPlan = async (meal: Meal) => {
     if (!isLoggedIn) {
       router.push('/(auth)/customer-login');
       return;
     }
-    console.log('Adding to plan:', meal.name);
+    
+    try {
+      const result = await MealPlanService.addMealToPlan(meal, 'Lunch');
+      
+      if (result.success) {
+        setToastVisible(true);
+        setToastMessage(result.message);
+        setToastType('success');
+      } else {
+        setToastVisible(true);
+        setToastMessage(result.message);
+        setToastType('error');
+      }
+    } catch (error) {
+      console.error(' Error adding meal to plan:', error);
+      setToastVisible(true);
+      setToastMessage('Failed to add meal to plan. Please try again.');
+      setToastType('error');
+    }
   };
 
   const handleOrder = (meal: Meal) => {
@@ -111,7 +139,22 @@ export default function LunchScreen() {
       router.push('/(auth)/customer-login');
       return;
     }
-    console.log('Ordering:', meal.name);
+    
+    // Add to cart
+    addToCart({
+      id: meal.id,
+      name: meal.name,
+      price: meal.price,
+      image: meal.image,
+      restaurant: 'Restaurant'
+    });
+    
+    // Show cart toast
+    setToastVisible(true);
+    setToastMessage(`${meal.name} added to cart!`);
+    setToastType('cart');
+    
+    console.log('Added to cart:', meal.name);
   };
 
   return (
@@ -204,6 +247,16 @@ export default function LunchScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      
+      {/* Toast Component */}
+      <MealPlanToast
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        onHide={() => setToastVisible(false)}
+        actionText={toastType === 'cart' ? 'View Cart' : undefined}
+        onActionPress={toastType === 'cart' ? () => router.push('/(customer-tabs)/order') : undefined}
+      />
     </SafeAreaView>
   );
 }
@@ -383,4 +436,4 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '600',
   },
-}); 
+});

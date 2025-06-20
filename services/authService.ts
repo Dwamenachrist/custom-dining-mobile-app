@@ -62,11 +62,30 @@ const authApi = {
       console.error('🚨 Auth API Request Failed:', error);
       
       if (error.response) {
+        // Extract backend error message properly - same pattern as api.ts handleError
+        const errorData = error.response.data;
+        let message = 'An error occurred';
+        
+        if (typeof errorData === 'string') {
+          message = errorData;
+        } else if (errorData?.message) {
+          message = errorData.message;
+        } else if (errorData?.error) {
+          message = errorData.error;
+        } else if (errorData?.errors && Array.isArray(errorData.errors)) {
+          // Handle validation errors array
+          message = errorData.errors.map((err: any) => 
+            typeof err === 'string' ? err : err.message || err.msg || String(err)
+          ).join(', ');
+        } else {
+          message = `HTTP ${error.response.status}: ${error.response.statusText}`;
+        }
+        
         return {
           success: false,
-          message: error.response.data?.message || `HTTP ${error.response.status}: ${error.response.statusText}`,
-          error: error.response.data?.error || error.response.statusText,
-          status: error.response.data?.status || 'error',
+          message: message,
+          error: errorData?.error || error.response.statusText,
+          status: errorData?.status || 'error',
         };
       } else if (error.request) {
         return {
@@ -141,11 +160,26 @@ class AuthService {
       }
       
       return response;
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Registration error:', error);
+      
+      // Check if it's an axios error with a backend response
+      if (error.response?.data) {
+        const backendMessage = error.response.data.message || 
+                              error.response.data.error ||
+                              `HTTP ${error.response.status}: ${error.response.statusText}`;
+        
+        return {
+          success: false,
+          message: backendMessage,
+          error: error.response.data.error || error.response.statusText,
+        };
+      }
+      
+      // Fallback to generic message if no backend response
       return {
         success: false,
-        message: 'Registration failed. Please try again.',
+        message: error instanceof Error ? error.message : 'Registration failed. Please try again.',
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
@@ -201,11 +235,26 @@ class AuthService {
         message: response.message || 'Login failed',
         error: response.error,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Login error:', error);
+      
+      // Check if it's an axios error with a backend response
+      if (error.response?.data) {
+        const backendMessage = error.response.data.message || 
+                              error.response.data.error ||
+                              `HTTP ${error.response.status}: ${error.response.statusText}`;
+        
+        return {
+          success: false,
+          message: backendMessage,
+          error: error.response.data.error || error.response.statusText,
+        };
+      }
+      
+      // Fallback to generic message if no backend response
       return {
         success: false,
-        message: 'Login failed. Please check your credentials.',
+        message: error instanceof Error ? error.message : 'Login failed. Please check your credentials.',
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
@@ -213,12 +262,12 @@ class AuthService {
 
   // 📝 STEP 4: Forgot Password (Email-based reset link)
   // This is what happens when user clicks "Forgot Password"
-  async forgotPassword(email: string): Promise<ApiResponse<{ message: string }>> {
+  async forgotPassword(email: string): Promise<ApiResponse<{ message: string; temporaryPassword?: string }>> {
     try {
       console.log('📧 Sending password reset email...');
       
       // Call the forgot password API endpoint with longer timeout
-      const response = await authApi.post<{ status: string; message: string }>(ENDPOINTS.forgotPassword, { email });
+      const response = await authApi.post<{ status: string; message: string; temporaryPassword?: string; tempPassword?: string; temporary_password?: string }>(ENDPOINTS.forgotPassword, { email });
       
       // Check if the API call was successful
       if (response.success && response.data) {
@@ -227,23 +276,52 @@ class AuthService {
         
         if (isSuccess) {
           console.log('✅ Password reset link sent successfully');
+          
+          // Extract temporary password from various possible field names
+          const temporaryPassword = response.data.temporaryPassword || 
+                                   response.data.tempPassword || 
+                                   response.data.temporary_password;
+          
+          if (temporaryPassword) {
+            console.log('🔑 Temporary password received from backend');
+          }
         } else {
           console.log('❌ Password reset failed:', response.data.message);
-      }
+        }
       
-      return {
+        return {
           success: isSuccess,
           message: response.data.message || (isSuccess ? 'Password reset link sent successfully' : 'Failed to send reset link'),
-        data: response.data
-      };
+          data: {
+            message: response.data.message || '',
+            temporaryPassword: response.data.temporaryPassword || 
+                              response.data.tempPassword || 
+                              response.data.temporary_password
+          }
+        };
       }
       
       return response;
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Forgot password error:', error);
+      
+      // Check if it's an axios error with a backend response
+      if (error.response?.data) {
+        const backendMessage = error.response.data.message || 
+                              error.response.data.error ||
+                              `HTTP ${error.response.status}: ${error.response.statusText}`;
+        
+        return {
+          success: false,
+          message: backendMessage,
+          error: error.response.data.error || error.response.statusText,
+        };
+      }
+      
+      // Fallback to generic message if no backend response
       return {
         success: false,
-        message: 'Failed to send reset link. Please try again.',
+        message: error instanceof Error ? error.message : 'Failed to send reset link. Please try again.',
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
@@ -366,6 +444,47 @@ class AuthService {
       return {
         success: false,
         message: 'Failed to verify email. Please try again.',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  // 📝 NEW: Resend Email Verification
+  async resendVerificationEmail(email?: string): Promise<ApiResponse<{ message: string }>> {
+    try {
+      console.log('📧 Resending verification email...');
+      
+      // Use provided email or get from storage
+      let userEmail = email;
+      if (!userEmail) {
+        userEmail = await AsyncStorage.getItem('userEmail') || undefined;
+        if (!userEmail) {
+          throw new Error('No email address found. Please sign up again.');
+        }
+      }
+      
+      // Call the resend verification API
+      const response = await api.post<{ status: string; message: string }>(
+        ENDPOINTS.resendVerification, 
+        { email: userEmail }
+      );
+      
+      if (response.success && response.data) {
+        const isSuccess = response.data.status === 'success';
+        
+        return {
+          success: isSuccess,
+          message: response.data.message || (isSuccess ? 'Verification email sent successfully' : 'Failed to send verification email'),
+          data: response.data
+        };
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Resend verification error:', error);
+      return {
+        success: false,
+        message: 'Failed to resend verification email. Please try again.',
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }

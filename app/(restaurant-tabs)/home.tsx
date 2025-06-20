@@ -1,168 +1,498 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image, StatusBar, ActivityIndicator } from 'react-native';
+﻿import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Image, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Button } from '../../components/Button';
-import MealCard from '../../components/MealCards';
-import { getAllMeals } from '../../services/api';
-import { mockApi } from '../../services/mockData';
+import { colors } from '../../theme/colors';
+import { useAuth } from '../../auth-context';
+import api from '../../services/api';
+import { getAssetFromMapping } from '../../services/assetMapping';
+
+interface DashboardStats {
+  todayOrders: number;
+  totalRevenue: number;
+  topDish: string;
+  totalMeals: number;
+}
+
+interface MealItem {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  dietaryTags: string[];
+  orderCount?: number;
+}
 
 export default function RestaurantHomeScreen() {
   const router = useRouter();
-  const [meals, setMeals] = useState([]);
-  const [isLoadingMeals, setIsLoadingMeals] = useState(true);
-  const [mealsError, setMealsError] = useState('');
+  const { user } = useAuth();
+  const [meals, setMeals] = useState<MealItem[]>([]);
+  const [stats, setStats] = useState<DashboardStats>({
+    todayOrders: 0,
+    totalRevenue: 0,
+    topDish: 'N/A',
+    totalMeals: 0
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
 
-  // Fetch meals on component mount
   useEffect(() => {
-    fetchMeals();
+    loadDashboardData();
   }, []);
 
-  const fetchMeals = async () => {
+  const loadDashboardData = async () => {
     try {
-      setIsLoadingMeals(true);
-      setMealsError('');
+      setIsLoading(true);
+      setError('');
       
-      // Comment out backend API call and use mock data instead
-      /*
-      const response = await getAllMeals();
+      const restaurantId = user?.restaurantId || '683c5e59a91c66e8f9486c17';
+      console.log(' Loading dashboard data for restaurant:', restaurantId);
       
-      if (response.success && response.data) {
-        // Take only first 3 meals for menu snapshot
-        setMeals(response.data.slice(0, 3) as any);
+      // Load meals
+      const mealsResponse = await api.get(`/meals/restaurant/${restaurantId}`);
+      
+      if (mealsResponse.success && mealsResponse.data && Array.isArray(mealsResponse.data)) {
+        const mealData = mealsResponse.data.slice(0, 3).map((meal: any) => ({
+          id: meal._id || meal.id,
+          name: meal.name,
+          description: meal.description,
+          price: typeof meal.price === 'string' ? parseFloat(meal.price) : meal.price,
+          dietaryTags: meal.dietaryTags || [],
+          orderCount: Math.floor(Math.random() * 20) + 1 // Mock order count
+        }));
+        
+        setMeals(mealData);
+        
+        // Calculate stats
+        const totalMeals = mealsResponse.data.length;
+        const todayOrders = Math.floor(Math.random() * 50) + 10;
+        const totalRevenue = todayOrders * 3500; // Average order value
+        const topDish = mealData.length > 0 ? mealData[0].name : 'N/A';
+        
+        setStats({
+          todayOrders,
+          totalRevenue,
+          topDish,
+          totalMeals
+        });
+        
+        console.log(' Dashboard data loaded successfully');
       } else {
-        setMealsError('Failed to load meals');
+        // Use sample data if no backend data
+        const sampleMeals: MealItem[] = [
+          {
+            id: '1',
+            name: 'Fruity Oats Delight',
+            description: 'Nourishing oats with fresh fruits',
+            price: 5000,
+            dietaryTags: ['Healthy', 'Vegetarian'],
+            orderCount: 12
+          },
+          {
+            id: '2',
+            name: 'Basmati Jollof Rice',
+            description: 'Premium basmati rice with spices',
+            price: 8500,
+            dietaryTags: ['Traditional', 'Gluten-Free'],
+            orderCount: 8
+          },
+          {
+            id: '3',
+            name: 'Grilled Fish & Veggies',
+            description: 'Fresh grilled fish with vegetables',
+            price: 9500,
+            dietaryTags: ['High-Protein', 'Omega-3'],
+            orderCount: 15
+          }
+        ];
+        
+        setMeals(sampleMeals);
+        setStats({
+          todayOrders: 24,
+          totalRevenue: 84000,
+          topDish: 'Grilled Fish & Veggies',
+          totalMeals: 12
+        });
+        
+        console.log(' Using sample dashboard data');
       }
-      */
-      
-      // Use mock API for development
-      const mockMeals = await mockApi.getMeals();
-      // Take only first 3 meals for menu snapshot
-      setMeals(mockMeals.slice(0, 3) as any);
-      
-    } catch (error: any) {
-      console.error('Error fetching meals:', error);
-      setMealsError('Failed to load meals');
+    } catch (err: any) {
+      console.error(' Error loading dashboard data:', err);
+      setError(err.message || 'Failed to load dashboard data');
     } finally {
-      setIsLoadingMeals(false);
+      setIsLoading(false);
     }
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadDashboardData();
+    setRefreshing(false);
+  };
+
+  const handleQuickAction = (action: string) => {
+    switch (action) {
+      case 'add-meal':
+        router.push('/add-meal');
+        break;
+      case 'orders':
+        router.push('/(restaurant-tabs)/order');
+        break;
+      case 'reviews':
+        router.push('/reviews?itemName=Restaurant');
+        break;
+      case 'menu':
+        router.push('/(restaurant-tabs)/menu-management');
+        break;
+      default:
+        console.log('Quick action:', action);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.lightGray }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={{ marginTop: 16, fontSize: 16, color: colors.darkGray }}>
+            Loading dashboard...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView className="flex-1 bg-[#f7f5f0]">
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.lightGray }}>
       <StatusBar barStyle="dark-content" />
-      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+      <ScrollView 
+        contentContainerStyle={{ paddingBottom: 32 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         {/* Header */}
-        <View className="px-5 pt-4 flex-row items-center justify-between">
+        <View style={{ 
+          paddingHorizontal: 20, 
+          paddingTop: 16, 
+          flexDirection: 'row', 
+          alignItems: 'center', 
+          justifyContent: 'space-between' 
+        }}>
           <TouchableOpacity 
-            className="flex-row items-center"
+            style={{ flexDirection: 'row', alignItems: 'center' }}
             onPress={() => router.push('/restaurant-profile?id=1&name=Health n Healthy')}
           >
-            <Image source={require('../../assets/restaurant-logo.png')} className="w-10 h-10 rounded-full mr-3" />
+            <Image 
+              source={require('../../assets/restaurant-logo.png')} 
+              style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} 
+            />
             <View>
-              <Text className="text-sm font-semibold text-gray-900">Health n Healthy</Text>
-              <Text className="text-xs text-gray-500">View Profile</Text>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.black }}>
+                Health n Healthy
+              </Text>
+              <Text style={{ fontSize: 12, color: colors.darkGray }}>
+                View Profile
+              </Text>
             </View>
           </TouchableOpacity>
-          <Text className="text-xl font-bold text-gray-900">Your Dashboard</Text>
+          
+          <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.black }}>
+            Dashboard
+          </Text>
+          
           <TouchableOpacity onPress={() => router.push('/restaurant-notifications')}>
-            <Ionicons name="notifications-outline" size={24} color="#22223B" />
+            <Ionicons name="notifications-outline" size={24} color={colors.black} />
           </TouchableOpacity>
         </View>
-        {/* Dish of the week */}
-        <View className="bg-white rounded-2xl mx-5 mt-5 p-4 flex-row items-center shadow-sm">
-          <Image source={require('../../assets/breakfast.png')} className="w-16 h-16 rounded-xl mr-4" />
-          <View className="flex-1">
-            <Text className="text-xs text-gray-400 mb-1">Dish of the week | Ordered 12 times</Text>
-            <Text className="text-lg font-bold text-green-800">Fruity Oats Delight</Text>
-            <View className="flex-row mt-1">
-              <Text className="bg-green-50 text-green-700 text-xs font-semibold px-2 py-1 rounded-lg mr-2">Low-Carb</Text>
-              <Text className="bg-green-50 text-green-700 text-xs font-semibold px-2 py-1 rounded-lg">Sugar-Free</Text>
+
+        {/* Featured Dish */}
+        <View style={{
+          backgroundColor: colors.white,
+          borderRadius: 16,
+          marginHorizontal: 20,
+          marginTop: 20,
+          padding: 16,
+          flexDirection: 'row',
+          alignItems: 'center',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 2
+        }}>
+          <Image 
+            source={getAssetFromMapping(meals[0]?.name) || require('../../assets/meals/Fruity Oats delight.png')} 
+            style={{ width: 64, height: 64, borderRadius: 12, marginRight: 16 }} 
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 12, color: colors.darkGray, marginBottom: 4 }}>
+              Featured Dish | Ordered {meals[0]?.orderCount || 12} times
+            </Text>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.primary, marginBottom: 8 }}>
+              {meals[0]?.name || 'Fruity Oats Delight'}
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {(meals[0]?.dietaryTags || ['Healthy', 'Vegetarian']).slice(0, 2).map((tag, index) => (
+                <View key={index} style={{
+                  backgroundColor: '#dcfce7',
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 8
+                }}>
+                  <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>
+                    {tag}
+                  </Text>
+                </View>
+              ))}
             </View>
           </View>
         </View>
-        {/* Stats */}
-        <View className="flex-row justify-between mx-5 mt-5">
-          <View className="flex-1 bg-white rounded-2xl items-center py-4 mx-1 shadow-sm">
-            <MaterialIcons name="shopping-bag" size={28} color="#2D6A4F" />
-            <Text className="text-xl font-bold text-gray-900 mt-2">24</Text>
-            <Text className="text-xs text-gray-500 mt-1">Today's Orders</Text>
+
+        {/* Stats Cards */}
+        <View style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          marginHorizontal: 20,
+          marginTop: 20,
+          gap: 8
+        }}>
+          <View style={{
+            flex: 1,
+            backgroundColor: colors.white,
+            borderRadius: 16,
+            alignItems: 'center',
+            paddingVertical: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 2
+          }}>
+            <MaterialIcons name="shopping-bag" size={28} color={colors.primary} />
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.black, marginTop: 8 }}>
+              {stats.todayOrders}
+            </Text>
+            <Text style={{ fontSize: 12, color: colors.darkGray, marginTop: 4 }}>
+              Today's Orders
+            </Text>
           </View>
-          <View className="flex-1 bg-white rounded-2xl items-center py-4 mx-1 shadow-sm">
-            <FontAwesome5 name="star" size={24} color="#2D6A4F" />
-            <Text className="text-xl font-bold text-gray-900 mt-2">Tofu Rice</Text>
-            <Text className="text-xs text-gray-500 mt-1">Top Dish</Text>
+
+          <View style={{
+            flex: 1,
+            backgroundColor: colors.white,
+            borderRadius: 16,
+            alignItems: 'center',
+            paddingVertical: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 2
+          }}>
+            <FontAwesome5 name="star" size={24} color={colors.primary} />
+            <Text style={{ 
+              fontSize: 16, 
+              fontWeight: 'bold', 
+              color: colors.black, 
+              marginTop: 8,
+              textAlign: 'center'
+            }}>
+              {stats.topDish.length > 10 ? stats.topDish.substring(0, 10) + '...' : stats.topDish}
+            </Text>
+            <Text style={{ fontSize: 12, color: colors.darkGray, marginTop: 4 }}>
+              Top Dish
+            </Text>
           </View>
-          <View className="flex-1 bg-white rounded-2xl items-center py-4 mx-1 shadow-sm">
-            <MaterialIcons name="attach-money" size={28} color="#2D6A4F" />
-            <Text className="text-xl font-bold text-gray-900 mt-2">₦12,500</Text>
-            <Text className="text-xs text-gray-500 mt-1">Revenue</Text>
+
+          <View style={{
+            flex: 1,
+            backgroundColor: colors.white,
+            borderRadius: 16,
+            alignItems: 'center',
+            paddingVertical: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 2
+          }}>
+            <MaterialIcons name="attach-money" size={28} color={colors.primary} />
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.black, marginTop: 8 }}>
+              {(stats.totalRevenue / 1000).toFixed(0)}k
+            </Text>
+            <Text style={{ fontSize: 12, color: colors.darkGray, marginTop: 4 }}>
+              Revenue
+            </Text>
           </View>
         </View>
 
         {/* Menu Snapshot */}
-        <View className="mx-5 mt-7">
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-base font-bold text-gray-900">Menu Snapshot</Text>
-            <Text className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">Mock Data</Text>
+        <View style={{ marginHorizontal: 20, marginTop: 28 }}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 12
+          }}>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: colors.black }}>
+              Menu Snapshot
+            </Text>
+            <TouchableOpacity onPress={() => handleQuickAction('menu')}>
+              <Text style={{ fontSize: 14, color: colors.primary, fontWeight: '600' }}>
+                View All
+              </Text>
+            </TouchableOpacity>
           </View>
-          
-          {isLoadingMeals ? (
-            <View className="bg-white rounded-2xl p-8 items-center shadow-sm">
-              <ActivityIndicator size="small" color="#2D6A4F" />
-              <Text className="text-gray-500 mt-2">Loading meals...</Text>
-            </View>
-          ) : mealsError ? (
-            <View className="bg-white rounded-2xl p-4 items-center shadow-sm">
-              <Text className="text-red-600 text-sm">{mealsError}</Text>
-              <TouchableOpacity className="mt-2" onPress={fetchMeals}>
-                <Text className="text-green-700 font-semibold">Retry</Text>
+
+          {error ? (
+            <View style={{
+              backgroundColor: colors.white,
+              borderRadius: 16,
+              padding: 16,
+              alignItems: 'center'
+            }}>
+              <Text style={{ color: '#ff4444', fontSize: 14, textAlign: 'center' }}>
+                {error}
+              </Text>
+              <TouchableOpacity 
+                style={{ marginTop: 8 }} 
+                onPress={loadDashboardData}
+              >
+                <Text style={{ color: colors.primary, fontWeight: '600' }}>
+                  Retry
+                </Text>
               </TouchableOpacity>
             </View>
-          ) : meals.length > 0 ? (
-            <View className="space-y-3">
-              {meals.map((meal: any) => (
-                <View key={meal.id} className="bg-white rounded-2xl flex-row items-center px-4 py-3 shadow-sm mb-2">
-                  <Image source={require('../../assets/breakfast.png')} className="w-14 h-14 rounded-lg mr-3" />
-                  <View className="flex-1">
-                    <Text className="font-semibold text-green-900 text-base">{meal.name}</Text>
-                    <View className="flex-row mt-1 flex-wrap">
-                      {meal.dietaryTags?.slice(0, 2).map((tag: string, idx: number) => (
-                        <Text key={idx} className="bg-green-50 text-green-700 text-xs font-semibold px-2 py-1 rounded-lg mr-2 mb-1 capitalize">{tag}</Text>
+          ) : (
+            <View style={{ gap: 8 }}>
+              {meals.map((meal) => (
+                <View key={meal.id} style={{
+                  backgroundColor: colors.white,
+                  borderRadius: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: 16,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 4,
+                  elevation: 2
+                }}>
+                  <Image 
+                    source={getAssetFromMapping(meal.name) || require('../../assets/meals/Basmati Jollof Rice.png')} 
+                    style={{ width: 56, height: 56, borderRadius: 8, marginRight: 12 }} 
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ 
+                      fontWeight: '600', 
+                      color: colors.primary, 
+                      fontSize: 16,
+                      marginBottom: 4
+                    }}>
+                      {meal.name}
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                      {meal.dietaryTags.slice(0, 2).map((tag, idx) => (
+                        <View key={idx} style={{
+                          backgroundColor: '#dcfce7',
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                          borderRadius: 6
+                        }}>
+                          <Text style={{ 
+                            color: colors.primary, 
+                            fontSize: 11, 
+                            fontWeight: '600' 
+                          }}>
+                            {tag}
+                          </Text>
+                        </View>
                       ))}
                     </View>
                   </View>
-                  <Text className="text-green-900 font-bold text-base ml-2">₦{Math.floor(meal.nutritionalInfo?.calories / 10) * 100 || '2500'}</Text>
+                  <Text style={{ 
+                    color: colors.black, 
+                    fontWeight: 'bold', 
+                    fontSize: 16 
+                  }}>
+                    {meal.price.toLocaleString()}
+                  </Text>
                 </View>
               ))}
             </View>
-          ) : (
-            <View className="bg-white rounded-2xl p-4 items-center shadow-sm">
-              <Text className="text-gray-500">No meals available</Text>
-            </View>
           )}
-          
-          <TouchableOpacity className="flex-row items-center justify-end mt-2" onPress={() => router.push('/meal/recommended')}>
-            <Text className="text-green-700 font-semibold mr-1">View full menu</Text>
-            <Ionicons name="arrow-forward" size={18} color="#2D6A4F" />
-          </TouchableOpacity>
         </View>
+
         {/* Quick Actions */}
-        <View className="mx-5 mt-8">
-          <Text className="text-base font-bold text-gray-900 mb-3">Quick Actions</Text>
-          <View className="flex-row justify-between">
-            <TouchableOpacity className="flex-1 bg-white rounded-2xl items-center py-5 mx-1 shadow-sm" onPress={() => router.push('/add-meal')}>
-              <Ionicons name="add-circle-outline" size={32} color="#2D6A4F" />
-              <Text className="text-green-900 font-semibold mt-2">Add Dish</Text>
+        <View style={{ marginHorizontal: 20, marginTop: 32 }}>
+          <Text style={{ fontSize: 16, fontWeight: 'bold', color: colors.black, marginBottom: 12 }}>
+            Quick Actions
+          </Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+            <TouchableOpacity 
+              style={{
+                flex: 1,
+                backgroundColor: colors.white,
+                borderRadius: 16,
+                alignItems: 'center',
+                paddingVertical: 20,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
+                elevation: 2
+              }}
+              onPress={() => handleQuickAction('add-meal')}
+            >
+              <Ionicons name="add-circle-outline" size={32} color={colors.primary} />
+              <Text style={{ color: colors.primary, fontWeight: '600', marginTop: 8 }}>
+                Add Dish
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity className="flex-1 bg-white rounded-2xl items-center py-5 mx-1 shadow-sm" onPress={() => {}}>
-              <MaterialIcons name="shopping-bag" size={28} color="#2D6A4F" />
-              <Text className="text-green-900 font-semibold mt-2">Orders</Text>
+
+            <TouchableOpacity 
+              style={{
+                flex: 1,
+                backgroundColor: colors.white,
+                borderRadius: 16,
+                alignItems: 'center',
+                paddingVertical: 20,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
+                elevation: 2
+              }}
+              onPress={() => handleQuickAction('orders')}
+            >
+              <MaterialIcons name="shopping-bag" size={28} color={colors.primary} />
+              <Text style={{ color: colors.primary, fontWeight: '600', marginTop: 8 }}>
+                Orders
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity className="flex-1 bg-white rounded-2xl items-center py-5 mx-1 shadow-sm" onPress={() => {}}>
-              <Ionicons name="chatbubble-ellipses-outline" size={28} color="#2D6A4F" />
-              <Text className="text-green-900 font-semibold mt-2">Reviews</Text>
+
+            <TouchableOpacity 
+              style={{
+                flex: 1,
+                backgroundColor: colors.white,
+                borderRadius: 16,
+                alignItems: 'center',
+                paddingVertical: 20,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
+                elevation: 2
+              }}
+              onPress={() => handleQuickAction('reviews')}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={28} color={colors.primary} />
+              <Text style={{ color: colors.primary, fontWeight: '600', marginTop: 8 }}>
+                Reviews
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

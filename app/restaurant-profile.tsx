@@ -1,114 +1,205 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, StatusBar, Dimensions, ActivityIndicator } from 'react-native';
+﻿import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { colors } from '../theme/colors';
-import { Button } from '../components/Button';
-import { mockApi, RestaurantProfile, PopularMeal } from '../services/mockData';
+import { useAuth } from '../auth-context';
+import { useCart } from '../cart-context';
+import MealPlanService from '../services/mealPlanService';
+import MealPlanToast from '../components/MealPlanToast';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+interface Restaurant {
+  id: string;
+  name: string;
+  rating: number;
+  reviewCount: number;
+  image: any;
+  tags: string[];
+  distance: string;
+  deliveryTime: string;
+  description?: string;
+}
+
+interface Meal {
+  id: string;
+  name: string;
+  description: string;
+  image: any;
+  price: number;
+  tags: string[];
+  calories: string;
+}
 
 export default function RestaurantProfileScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const [restaurant, setRestaurant] = useState<RestaurantProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { isLoggedIn } = useAuth();
+  const { addToCart } = useCart();
+  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [error, setError] = useState('');
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'cart'>('success');
+
+  // Sample menu items for the restaurant
+  const menuItems: Meal[] = [
+    {
+      id: '1',
+      name: 'Fruity Oats',
+      description: 'Delicious oats with fresh fruits',
+      image: require('../assets/meals/Fruity Oats delight.png'),
+      price: 3000,
+      tags: ['Healthy', 'Breakfast'],
+      calories: '310 Cal'
+    },
+    {
+      id: '2',
+      name: 'Avocado Veggie Bowl',
+      description: 'Fresh avocado with mixed vegetables',
+      image: require('../assets/meals/Avocado Veggie Bowl.png'),
+      price: 4000,
+      tags: ['Vegan', 'Healthy'],
+      calories: '280 Cal'
+    },
+    {
+      id: '3',
+      name: 'Grilled Chicken',
+      description: 'Perfectly grilled chicken with spices',
+      image: require('../assets/meals/Grilled Fish and Veggies.png'),
+      price: 6000,
+      tags: ['Protein', 'Grilled'],
+      calories: '420 Cal'
+    }
+  ];
 
   useEffect(() => {
-    loadRestaurantProfile();
-  }, [params.id]);
-
-  const loadRestaurantProfile = async () => {
+    // Parse restaurant data from params
     try {
-      setLoading(true);
-      setError(null);
-      const restaurantId = params.id as string || '1';
-      const profile = await mockApi.getRestaurantProfile(restaurantId);
-      
-      if (profile) {
-        setRestaurant(profile);
-      } else {
-        setError('Restaurant not found');
-      }
+      const restaurantData: Restaurant = {
+        id: params.id as string || '1',
+        name: params.name as string || 'GreenChef Kitchen',
+        rating: parseFloat(params.rating as string) || 4.8,
+        reviewCount: parseInt(params.reviewCount as string) || 120,
+        image: params.imageSource ? JSON.parse(params.imageSource as string) : require('../assets/restaurants/Green Chef Kitchen.png'),
+        tags: params.tags ? JSON.parse(params.tags as string) : ['Vegan Friendly', 'Organic Focused', 'Plant-Based'],
+        distance: params.distance as string || '2.0 km',
+        deliveryTime: params.deliveryTime as string || '25-35 min',
+        description: 'Fresh, organic meals prepared with love and care for your health'
+      };
+      setRestaurant(restaurantData);
     } catch (err) {
-      setError('Failed to load restaurant profile');
-      console.error('Error loading restaurant profile:', err);
-    } finally {
-      setLoading(false);
+      console.error('Error parsing restaurant data:', err);
+      setError('Failed to load restaurant information');
+    }
+  }, [params]);
+
+  const handleOrder = (meal: Meal) => {
+    if (!isLoggedIn) {
+      router.push('/(auth)/customer-login');
+      return;
+    }
+    
+    addToCart({
+      id: meal.id,
+      name: meal.name,
+      price: meal.price,
+      image: meal.image,
+      restaurant: restaurant?.name || 'Restaurant'
+    });
+    
+    setToastVisible(true);
+    setToastMessage(`${meal.name} added to cart!`);
+    setToastType('cart');
+  };
+
+  const handleAddToPlan = async (meal: Meal) => {
+    if (!isLoggedIn) {
+      router.push('/(auth)/customer-login');
+      return;
+    }
+    
+    try {
+      const result = await MealPlanService.addMealToPlan({
+        id: meal.id,
+        name: meal.name,
+        description: meal.description,
+        image: meal.image,
+        tags: meal.tags,
+        calories: meal.calories,
+        price: meal.price,
+        restaurant: restaurant?.name
+      });
+      
+      if (result.success) {
+        setToastVisible(true);
+        setToastMessage(result.message);
+        setToastType('success');
+      } else {
+        setToastVisible(true);
+        setToastMessage(result.message);
+        setToastType('error');
+      }
+    } catch (error) {
+      console.error('Error adding meal to plan:', error);
+      setToastVisible(true);
+      setToastMessage('Failed to add meal to plan. Please try again.');
+      setToastType('error');
     }
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading restaurant...</Text>
-      </View>
-    );
-  }
-
-  if (error || !restaurant) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error || 'Restaurant not found'}</Text>
-        <Button
-          title="Go Back"
-          variant="primary"
-          onPress={() => router.back()}
-        />
-      </View>
-    );
-  }
-
   const handleViewMenu = () => {
-    console.log('Navigate to full menu');
+    router.push('/menu');
   };
 
   const handleStartOrder = () => {
-    console.log('Start order');
-  };
-
-  const handleAddToPlan = (meal: PopularMeal) => {
-    console.log('Add to plan:', meal.name);
+    router.push('/(customer-tabs)/order');
   };
 
   const handleSeeAllReviews = () => {
-    console.log('See all reviews');
+    router.push(`/reviews?itemName=${encodeURIComponent(restaurant?.name || 'Restaurant')}`);
   };
 
-  const handleSeeAllPopular = () => {
-    console.log('See all popular meals');
-  };
+  if (error || !restaurant) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error || 'Restaurant not found'}</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
       
-      {/* Step 1: Image Background - 390x324 from status bar */}
+      {/* Header Image */}
       <View style={styles.imageContainer}>
-        <Image source={restaurant.coverImage} style={styles.backgroundImage} />
+        <Image source={restaurant.image} style={styles.backgroundImage} />
         
         {/* Back Button */}
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => router.back()}
-        >
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         
-        {/* Header Title */}
-        <Text style={styles.headerTitle}>Restaurant profile</Text>
+        {/* Profile Text */}
+        <Text style={styles.profileText}>Profile</Text>
+        
+        {/* Edit Button */}
+        <TouchableOpacity style={styles.editButton}>
+          <Ionicons name="create-outline" size={24} color="#fff" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Step 2: Nice Space/Margin before restaurant info */}
-        <View style={styles.contentSpacing} />
-        
-        {/* Step 3: Restaurant Information */}
-        <View style={styles.restaurantInfo}>
+        {/* Restaurant Info Card */}
+        <View style={styles.infoCard}>
           <Text style={styles.restaurantName}>{restaurant.name}</Text>
-          <Text style={styles.restaurantAddress}>{restaurant.address}</Text>
           
           {/* Tags */}
           <View style={styles.tagsContainer}>
@@ -119,71 +210,104 @@ export default function RestaurantProfileScreen() {
             ))}
           </View>
           
-          {/* Rating with See all */}
-          <View style={styles.ratingContainer}>
-            <View style={styles.starsContainer}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Ionicons
-                  key={star}
-                  name={star <= Math.floor(restaurant.rating) ? "star" : star <= restaurant.rating ? "star-half" : "star-outline"}
-                  size={20}
-                  color="#FFD700"
-                />
-              ))}
-              <Text style={styles.ratingText}>({restaurant.reviewCount})</Text>
+          {/* Stats Row */}
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Ionicons name="star" size={16} color="#FFD700" />
+              <Text style={styles.statText}>{restaurant.rating}</Text>
             </View>
-            <TouchableOpacity onPress={handleSeeAllReviews}>
-              <Text style={styles.seeAllLink}>See all</Text>
-            </TouchableOpacity>
+            <View style={styles.statItem}>
+              <Ionicons name="people" size={16} color={colors.darkGray} />
+              <Text style={styles.statText}>{restaurant.reviewCount}</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Ionicons name="time" size={16} color={colors.darkGray} />
+              <Text style={styles.statText}>{restaurant.deliveryTime}</Text>
+            </View>
           </View>
           
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
-            <Button
-              title="View Menu"
-              variant="primary"
-              onPress={handleViewMenu}
-              style={styles.actionButton}
-            />
-            <Button
-              title="Start Order"
-              variant="outline"
-              onPress={handleStartOrder}
-              style={styles.actionButton}
-            />
+            <TouchableOpacity style={styles.actionButton} onPress={handleViewMenu}>
+              <Text style={styles.actionButtonText}>View Menu</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionButton, styles.secondaryButton]} onPress={handleSeeAllReviews}>
+              <Text style={[styles.actionButtonText, styles.secondaryButtonText]}>Reviews</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionButton, styles.secondaryButton]} onPress={handleStartOrder}>
+              <Text style={[styles.actionButtonText, styles.secondaryButtonText]}>Start Order</Text>
+            </TouchableOpacity>
           </View>
         </View>
         
-        {/* Step 4: Most Popular Section - Simple Clean Layout */}
-        <View style={styles.popularSection}>
+        {/* Your Menu Section */}
+        <View style={styles.menuSection}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Most Popular</Text>
-            <TouchableOpacity onPress={handleSeeAllPopular}>
-              <Text style={styles.seeAllLink}>See all</Text>
+            <Text style={styles.sectionTitle}>Your Menu</Text>
+            <TouchableOpacity onPress={handleViewMenu}>
+              <Text style={styles.seeAllText}>See all</Text>
             </TouchableOpacity>
           </View>
           
-          {/* Simple grid of meals */}
-          <View style={styles.mealsGrid}>
-            {restaurant.popularMeals.map((meal) => (
-              <View key={meal.id} style={styles.mealCard}>
-                <Image source={meal.image} style={styles.mealImage} />
-                <Text style={styles.mealName}>{meal.name}</Text>
-                <Text style={styles.mealDescription}>{meal.description}</Text>
-                <Button
-                  title="Add to Plan"
-                  variant="primary"
+          {/* Menu Items Grid */}
+          <View style={styles.menuGrid}>
+            {menuItems.map((meal) => (
+              <View key={meal.id} style={styles.menuCard}>
+                <Image source={meal.image} style={styles.menuItemImage} />
+                <Text style={styles.menuItemName}>{meal.name}</Text>
+                <Text style={styles.menuItemPrice}>{meal.price.toLocaleString()}</Text>
+                <TouchableOpacity 
+                  style={styles.addButton}
                   onPress={() => handleAddToPlan(meal)}
-                  style={styles.addToPlanButton}
-                />
+                >
+                  <Ionicons name="add" size={16} color="white" />
+                </TouchableOpacity>
               </View>
             ))}
           </View>
         </View>
         
-        {/* Bottom spacing */}
-        <View style={styles.bottomSpacing} />
+        {/* Reviews Section */}
+        <View style={styles.reviewsSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Reviews</Text>
+            <TouchableOpacity onPress={handleSeeAllReviews}>
+              <Text style={styles.seeAllText}>See all</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {/* Sample Reviews */}
+          <View style={styles.reviewCard}>
+            <Text style={styles.reviewerName}>Vivian Eze</Text>
+            <View style={styles.reviewStars}>
+              {[1,2,3,4,5].map((star) => (
+                <Ionicons key={star} name="star" size={14} color="#FFD700" />
+              ))}
+            </View>
+            <Text style={styles.reviewText}>Great food and fast delivery! The oats were delicious and fresh. Highly recommend!</Text>
+          </View>
+          
+          <View style={styles.reviewCard}>
+            <Text style={styles.reviewerName}>Victor Adewale</Text>
+            <View style={styles.reviewStars}>
+              {[1,2,3,4,5].map((star) => (
+                <Ionicons key={star} name="star" size={14} color="#FFD700" />
+              ))}
+            </View>
+            <Text style={styles.reviewText}>Amazing healthy options! Perfect for my diet plan. Will definitely order again.</Text>
+          </View>
+        </View>
       </ScrollView>
+      
+      {/* Toast Component */}
+      <MealPlanToast
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        onHide={() => setToastVisible(false)}
+        actionText={toastType === 'cart' ? 'View Cart' : undefined}
+        onActionPress={toastType === 'cart' ? () => router.push('/(customer-tabs)/order') : undefined}
+      />
     </View>
   );
 }
@@ -193,11 +317,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f7f5f0',
   },
-  
-  // Step 1: Image Background - 390x324
   imageContainer: {
-    width: screenWidth,
-    height: 324,
+    height: 250,
     position: 'relative',
   },
   backgroundImage: {
@@ -209,98 +330,104 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 50,
     left: 20,
-    width: 40,
-    height: 40,
+    backgroundColor: 'rgba(0,0,0,0.3)',
     borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 8,
   },
-  headerTitle: {
+  profileText: {
     position: 'absolute',
-    top: 55,
-    left: 80,
+    top: 58,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    color: 'white',
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
   },
-  
+  editButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 20,
+    padding: 8,
+  },
   scrollView: {
     flex: 1,
+    marginTop: -20,
   },
-  
-  // Step 2: Nice spacing before content
-  contentSpacing: {
-    height: 24,
-  },
-  
-  // Step 3: Restaurant Information
-  restaurantInfo: {
-    paddingHorizontal: 20,
-    marginBottom: 32,
+  infoCard: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    marginBottom: 20,
   },
   restaurantName: {
     fontSize: 24,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    marginBottom: 4,
-  },
-  restaurantAddress: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 16,
+    fontWeight: 'bold',
+    color: colors.black,
+    marginBottom: 12,
   },
   tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 16,
     gap: 8,
+    marginBottom: 16,
   },
   tag: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-    borderRadius: 16,
+    backgroundColor: colors.primary,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   tagText: {
+    color: 'white',
     fontSize: 12,
-    fontWeight: '600',
-    color: colors.primary,
+    fontWeight: '500',
   },
-  ratingContainer: {
+  statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    gap: 20,
     marginBottom: 20,
   },
-  starsContainer: {
+  statItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 4,
   },
-  ratingText: {
+  statText: {
     fontSize: 14,
-    color: '#6b7280',
-    marginLeft: 4,
-  },
-  seeAllLink: {
-    fontSize: 14,
-    color: colors.primary,
-    fontWeight: '600',
+    color: colors.darkGray,
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
   actionButton: {
     flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
   },
-  
-  // Step 4: Most Popular - Simple Clean Layout
-  popularSection: {
-    paddingHorizontal: 20,
+  secondaryButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  actionButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  secondaryButtonText: {
+    color: colors.primary,
+  },
+  menuSection: {
+    backgroundColor: 'white',
+    padding: 20,
+    marginBottom: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -309,79 +436,96 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1a1a1a',
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.black,
   },
-  mealsGrid: {
+  seeAllText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  menuGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     gap: 12,
   },
-  mealCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+  menuCard: {
+    width: (SCREEN_WIDTH - 64) / 3,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 8,
+    alignItems: 'center',
+    position: 'relative',
   },
-  mealImage: {
-    width: '100%',
-    height: 120,
-    resizeMode: 'cover',
+  menuItemImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginBottom: 8,
   },
-  mealName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    marginTop: 12,
-    marginHorizontal: 12,
+  menuItemName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.black,
+    textAlign: 'center',
     marginBottom: 4,
   },
-  mealDescription: {
+  menuItemPrice: {
     fontSize: 12,
-    color: '#6b7280',
-    marginHorizontal: 12,
-    marginBottom: 12,
-    lineHeight: 16,
+    color: colors.primary,
+    fontWeight: '600',
   },
-  addToPlanButton: {
-    marginHorizontal: 12,
-    marginBottom: 12,
-    paddingVertical: 8,
+  addButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    padding: 4,
   },
-  
-  bottomSpacing: {
-    height: 40,
+  reviewsSection: {
+    backgroundColor: 'white',
+    padding: 20,
+    marginBottom: 20,
   },
-  
-  // Loading and Error states
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f7f5f0',
+  reviewCard: {
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#6b7280',
+  reviewerName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.black,
+    marginBottom: 4,
+  },
+  reviewStars: {
+    flexDirection: 'row',
+    gap: 2,
+    marginBottom: 8,
+  },
+  reviewText: {
+    fontSize: 13,
+    color: colors.darkGray,
+    lineHeight: 18,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f7f5f0',
     padding: 20,
   },
   errorText: {
     fontSize: 16,
-    color: '#ef4444',
+    color: colors.darkGray,
     textAlign: 'center',
     marginBottom: 20,
+  },
+  backButtonText: {
+    color: colors.primary,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

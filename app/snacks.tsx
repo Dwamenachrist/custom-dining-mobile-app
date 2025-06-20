@@ -1,9 +1,14 @@
-import React, { useState, useEffect } from 'react';
+﻿// Updated snacks.tsx - Complete Order Now and Add to Plan functionality
+
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors } from '../theme/colors';
 import { useAuth } from '../auth-context';
+import { useCart } from '../cart-context';
+import MealPlanService from '../services/mealPlanService';
+import MealPlanToast from '../components/MealPlanToast';
 
 interface Meal {
   id: string;
@@ -19,70 +24,74 @@ interface Meal {
 const SNACK_MEALS: Meal[] = [
   {
     id: '1',
-    name: 'Mixed Nuts Bowl',
-    description: 'Assorted roasted nuts with a hint of sea salt',
+    name: 'Mixed Nuts',
+    description: 'A healthy mix of almonds, cashews, and walnuts',
     image: require('../assets/recommendation1.png'),
-    tags: ['High Protein', 'Healthy Fats'],
-    calories: '280 Cal Per Serving',
-    rating: 4.7,
-    price: 800
+    tags: ['Healthy', 'High-Protein'],
+    calories: '180 Cal Per Serving',
+    rating: 4.5,
+    price: 2500
   },
   {
     id: '2',
-    name: 'Greek Yogurt Parfait',
-    description: 'Creamy Greek yogurt layered with fresh berries and granola',
+    name: 'Fruit Bowl',
+    description: 'Fresh seasonal fruits cut and ready to eat',
     image: require('../assets/recommendation2.png'),
-    tags: ['High Protein', 'Probiotics'],
-    calories: '220 Cal Per Serving',
-    rating: 4.8,
-    price: 1200
+    tags: ['Fresh', 'Vitamin-Rich'],
+    calories: '120 Cal Per Serving',
+    rating: 4.7,
+    price: 2000
   },
   {
     id: '3',
-    name: 'Veggie Hummus Plate',
-    description: 'Fresh cut vegetables served with homemade hummus',
+    name: 'Yogurt Parfait',
+    description: 'Greek yogurt layered with granola and berries',
     image: require('../assets/recommendation3.png'),
-    tags: ['Vegan', 'High Fiber'],
-    calories: '180 Cal Per Serving',
+    tags: ['Protein', 'Probiotic'],
+    calories: '220 Cal Per Serving',
     rating: 4.6,
-    price: 900
+    price: 3000
   },
   {
     id: '4',
-    name: 'Apple Slices & Almond Butter',
-    description: 'Crisp apple slices paired with natural almond butter',
+    name: 'Veggie Sticks',
+    description: 'Fresh carrots, celery, and bell peppers with hummus',
     image: require('../assets/recommendation1.png'),
-    tags: ['Natural', 'Quick'],
-    calories: '250 Cal Per Serving',
-    rating: 4.5,
-    price: 700
+    tags: ['Low-Calorie', 'Fiber-Rich'],
+    calories: '90 Cal Per Serving',
+    rating: 4.3,
+    price: 1800
   },
   {
     id: '5',
     name: 'Energy Balls',
-    description: 'Date and oat energy balls rolled in coconut',
+    description: 'Homemade energy balls with dates, nuts, and cocoa',
     image: require('../assets/recommendation2.png'),
-    tags: ['Natural', 'Energy Boost'],
-    calories: '160 Cal Per Serving',
-    rating: 4.9,
-    price: 600
+    tags: ['Energy-Boost', 'Natural'],
+    calories: '150 Cal Per Serving',
+    rating: 4.8,
+    price: 2200
   },
   {
     id: '6',
-    name: 'Cheese & Crackers',
-    description: 'Whole grain crackers with aged cheese selection',
+    name: 'Smoothie Bowl',
+    description: 'Thick smoothie topped with granola, fruits, and seeds',
     image: require('../assets/recommendation3.png'),
-    tags: ['Balanced', 'Satisfying'],
-    calories: '320 Cal Per Serving',
-    rating: 4.4,
-    price: 1000
+    tags: ['Antioxidants', 'Refreshing'],
+    calories: '280 Cal Per Serving',
+    rating: 4.9,
+    price: 3500
   }
 ];
 
 export default function SnacksScreen() {
   const router = useRouter();
   const { isLoggedIn } = useAuth();
+  const { addToCart } = useCart();
   const [selectedSort, setSelectedSort] = useState('Most Popular');
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'cart'>('success');
 
   const handleMealPress = (meal: Meal) => {
     router.push({
@@ -93,17 +102,36 @@ export default function SnacksScreen() {
         description: meal.description,
         price: meal.price.toString(),
         calories: meal.calories,
+        imageSource: JSON.stringify(meal.image),
         tags: JSON.stringify(meal.tags)
       }
     });
   };
 
-  const handleAddToPlan = (meal: Meal) => {
+  const handleAddToPlan = async (meal: Meal) => {
     if (!isLoggedIn) {
       router.push('/(auth)/customer-login');
       return;
     }
-    console.log('Adding to plan:', meal.name);
+    
+    try {
+      const result = await MealPlanService.addMealToPlan(meal, 'Snacks');
+      
+      if (result.success) {
+        setToastVisible(true);
+        setToastMessage(result.message);
+        setToastType('success');
+      } else {
+        setToastVisible(true);
+        setToastMessage(result.message);
+        setToastType('error');
+      }
+    } catch (error) {
+      console.error(' Error adding meal to plan:', error);
+      setToastVisible(true);
+      setToastMessage('Failed to add meal to plan. Please try again.');
+      setToastType('error');
+    }
   };
 
   const handleOrder = (meal: Meal) => {
@@ -111,7 +139,22 @@ export default function SnacksScreen() {
       router.push('/(auth)/customer-login');
       return;
     }
-    console.log('Ordering:', meal.name);
+    
+    // Add to cart
+    addToCart({
+      id: meal.id,
+      name: meal.name,
+      price: meal.price,
+      image: meal.image,
+      restaurant: 'Restaurant'
+    });
+    
+    // Show cart toast
+    setToastVisible(true);
+    setToastMessage(`${meal.name} added to cart!`);
+    setToastType('cart');
+    
+    console.log('Added to cart:', meal.name);
   };
 
   return (
@@ -204,6 +247,16 @@ export default function SnacksScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      
+      {/* Toast Component */}
+      <MealPlanToast
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        onHide={() => setToastVisible(false)}
+        actionText={toastType === 'cart' ? 'View Cart' : undefined}
+        onActionPress={toastType === 'cart' ? () => router.push('/(customer-tabs)/order') : undefined}
+      />
     </SafeAreaView>
   );
 }
@@ -280,6 +333,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: 16,
     padding: 4,
+  },
+  cardContent: {
+    flexDirection: 'row',
+    gap: 12,
   },
   mealImage: {
     width: 80,
@@ -378,9 +435,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.primary,
     fontWeight: '600',
-  },
-  cardContent: {
-    flexDirection: 'row',
-    gap: 12,
   },
 });

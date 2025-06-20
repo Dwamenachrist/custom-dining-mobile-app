@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Image, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors } from '../theme/colors';
 import { useAuth } from '../auth-context';
+import { getHybridMeals } from '../services/hybridMealService';
+import { useCart } from '../cart-context';
+import MealPlanService from '../services/mealPlanService';
+import MealPlanToast from '../components/MealPlanToast';
 
 interface Meal {
   id: string;
@@ -14,75 +18,73 @@ interface Meal {
   calories: string;
   rating: number;
   price: number;
+  restaurant?: string;
 }
-
-const BREAKFAST_MEALS: Meal[] = [
-  {
-    id: '1',
-    name: 'Fruity Oats Delight',
-    description: 'A delightful bowl of oats topped with mixed fruits',
-    image: require('../assets/recommendation1.png'),
-    tags: ['Low-Carb', 'Sugar-Free'],
-    calories: '550 Cal Per Serving',
-    rating: 4.8,
-    price: 1200
-  },
-  {
-    id: '2',
-    name: 'Avocado Veggie Bowl',
-    description: 'A flavorful bowl of avocado and grilled chicken, with veggies',
-    image: require('../assets/recommendation2.png'),
-    tags: ['Vegan', 'Diabetic-Friendly'],
-    calories: '350 Cal Per Serving',
-    rating: 4.6,
-    price: 1500
-  },
-  {
-    id: '3',
-    name: 'Avocado Toast And Egg',
-    description: 'A nutritious dish of toasted bread with avocado spread and egg',
-    image: require('../assets/recommendation3.png'),
-    tags: ['Vegan', 'Diabetic-Friendly'],
-    calories: '380 Cal Per Serving',
-    rating: 4.7,
-    price: 1800
-  },
-  {
-    id: '4',
-    name: 'Moi Moi And Akamu',
-    description: 'Moi moi and akamu with milk, a morning boost',
-    image: require('../assets/recommendation1.png'),
-    tags: ['Sugar-Free', 'Diabetic-Friendly'],
-    calories: '450 Cal Per Serving',
-    rating: 4.5,
-    price: 2000
-  },
-  {
-    id: '5',
-    name: 'Fruity Pancakes',
-    description: 'Fluffy Strawberry banana pancakes',
-    image: require('../assets/recommendation2.png'),
-    tags: ['Low-Carb', 'Sugar-Free'],
-    calories: '430 Cal Per Serving',
-    rating: 4.9,
-    price: 1600
-  },
-  {
-    id: '6',
-    name: 'Peanut Butter Toast',
-    description: 'Peanut butter spread on toasted whole wheat bread and banana',
-    image: require('../assets/recommendation3.png'),
-    tags: ['Low-Carb', 'Sugar-Free'],
-    calories: '390 Cal Per Serving',
-    rating: 4.4,
-    price: 1300
-  }
-];
 
 export default function BreakfastScreen() {
   const router = useRouter();
   const { isLoggedIn } = useAuth();
+  const { addToCart } = useCart();
   const [selectedSort, setSelectedSort] = useState('Most Popular');
+  const [meals, setMeals] = useState<Meal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'cart'>('success');
+
+  useEffect(() => {
+    loadBreakfastMeals();
+  }, []);
+
+  const loadBreakfastMeals = async () => {
+    try {
+      setLoading(true);
+      console.log('🌅 Loading breakfast meals from hybrid service...');
+      
+      const response = await getHybridMeals();
+      
+      if (response.success && response.data) {
+        // Filter for breakfast meals and convert to display format
+        const breakfastMeals = response.data
+          .filter(meal => 
+            meal.dietaryTags.some(tag => 
+              tag.toLowerCase().includes('breakfast') || 
+              meal.name.toLowerCase().includes('oats') ||
+              meal.name.toLowerCase().includes('pancakes') ||
+              meal.name.toLowerCase().includes('toast') ||
+              meal.name.toLowerCase().includes('moi moi')
+            )
+          )
+          .map((meal: any) => ({
+            id: meal.id,
+            name: meal.name,
+            description: meal.description,
+            image: meal.image || require('../assets/recommendation1.png'),
+            tags: meal.dietaryTags.slice(0, 2), // Show first 2 tags
+            calories: meal.nutritionalInfo?.calories || '310 Cal Per Serving',
+            rating: 4.5 + Math.random() * 0.5, // Random rating between 4.5-5.0
+            price: parseFloat(meal.price) || 3000,
+            restaurant: meal.restaurant?.name || 'Restaurant'
+          }));
+        
+        // If no breakfast meals found, use fallback meals
+        if (breakfastMeals.length === 0) {
+          setMeals(BREAKFAST_MEALS);
+        } else {
+          setMeals(breakfastMeals);
+        }
+      } else {
+        setMeals(BREAKFAST_MEALS);
+      }
+      
+      console.log('✅ Breakfast meals loaded!');
+    } catch (error) {
+      console.error('❌ Error loading breakfast meals:', error);
+      setMeals(BREAKFAST_MEALS);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleMealPress = (meal: Meal) => {
     router.push({
@@ -93,17 +95,36 @@ export default function BreakfastScreen() {
         description: meal.description,
         price: meal.price.toString(),
         calories: meal.calories,
+        imageSource: JSON.stringify(meal.image),
         tags: JSON.stringify(meal.tags)
       }
     });
   };
 
-  const handleAddToPlan = (meal: Meal) => {
+  const handleAddToPlan = async (meal: Meal) => {
     if (!isLoggedIn) {
       router.push('/(auth)/customer-login');
       return;
     }
-    console.log('Adding to plan:', meal.name);
+    
+    try {
+      const result = await MealPlanService.addMealToPlan(meal, 'Breakfast');
+      
+      if (result.success) {
+        setToastVisible(true);
+        setToastMessage(result.message);
+        setToastType('success');
+      } else {
+        setToastVisible(true);
+        setToastMessage(result.message);
+        setToastType('error');
+      }
+    } catch (error) {
+      console.error('❌ Error adding meal to plan:', error);
+      setToastVisible(true);
+      setToastMessage('Failed to add meal to plan. Please try again.');
+      setToastType('error');
+    }
   };
 
   const handleOrder = (meal: Meal) => {
@@ -111,8 +132,87 @@ export default function BreakfastScreen() {
       router.push('/(auth)/customer-login');
       return;
     }
-    console.log('Ordering:', meal.name);
+    
+    // Add to cart
+    addToCart({
+      id: meal.id,
+      name: meal.name,
+      price: meal.price,
+      image: meal.image,
+      restaurant: meal.restaurant
+    });
+    
+    // Show cart toast
+    setToastVisible(true);
+    setToastMessage(`${meal.name} added to cart!`);
+    setToastType('cart');
+    
+    console.log('Added to cart:', meal.name);
   };
+
+// Fallback breakfast meals with proper images
+const BREAKFAST_MEALS: Meal[] = [
+  {
+    id: '1',
+    name: 'Fruity Oats Delight',
+    description: 'A delightful bowl of oats topped with mixed fruits',
+    image: require('../assets/meals/Fruity Oats delight.png'),
+    tags: ['Low-Carb', 'Sugar-Free'],
+    calories: '310 Cal Per Serving',
+    rating: 4.8,
+    price: 5000
+  },
+  {
+    id: '2',
+    name: 'Avocado Toast And Egg',
+    description: 'A nutritious dish of toasted bread with avocado spread and egg',
+    image: require('../assets/meals/Avocado Toast and Egg.png'),
+    tags: ['High-Protein', 'Healthy-Fats'],
+    calories: '380 Cal Per Serving',
+    rating: 4.7,
+    price: 4500
+  },
+  {
+    id: '3',
+    name: 'Fruity Pancakes',
+    description: 'Fluffy Strawberry banana pancakes',
+    image: require('../assets/meals/Fruity pancakes.png'),
+    tags: ['Breakfast', 'High-Protein'],
+    calories: '450 Cal Per Serving',
+    rating: 4.9,
+    price: 5500
+  },
+  {
+    id: '4',
+    name: 'Moi Moi And Akamu',
+    description: 'Moi moi and akamu with milk, a morning boost',
+    image: require('../assets/meals/Moi moi and Akamu.png'),
+    tags: ['Vegan', 'Traditional'],
+    calories: '280 Cal Per Serving',
+    rating: 4.5,
+    price: 3500
+  },
+  {
+    id: '5',
+    name: 'Peanut Butter Toast',
+    description: 'Peanut butter spread on toasted whole wheat bread and banana',
+    image: require('../assets/meals/Peanut Butter Toast.png'),
+    tags: ['High-Protein', 'Energy-Boosting'],
+    calories: '420 Cal Per Serving',
+    rating: 4.4,
+    price: 3000
+  },
+  {
+    id: '6',
+    name: 'Avocado Veggie Bowl',
+    description: 'A flavorful bowl of avocado and grilled chicken, with veggies',
+    image: require('../assets/meals/Avocado Veggie Bowl.png'),
+    tags: ['Vegan', 'Superfood'],
+    calories: '420 Cal Per Serving',
+    rating: 4.6,
+    price: 6500
+  }
+];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -139,71 +239,85 @@ export default function BreakfastScreen() {
 
         {/* Meal Cards */}
         <View style={styles.mealsList}>
-          {BREAKFAST_MEALS.map((meal) => (
-            <TouchableOpacity
-              key={meal.id}
-              style={styles.mealCard}
-              onPress={() => handleMealPress(meal)}
-              activeOpacity={0.95}
-            >
-              <TouchableOpacity 
-                style={styles.heartButton}
-                onPress={() => console.log('Heart pressed')}
+          {loading ? (
+            <ActivityIndicator size="large" color={colors.primary} />
+          ) : (
+            meals.map((meal) => (
+              <TouchableOpacity
+                key={meal.id}
+                style={styles.mealCard}
+                onPress={() => handleMealPress(meal)}
+                activeOpacity={0.95}
               >
-                <Ionicons name="heart-outline" size={20} color="#666" />
-              </TouchableOpacity>
-              
-              {/* Card Content - Horizontal Layout */}
-              <View style={styles.cardContent}>
-                {/* Image on the left */}
-                <Image source={meal.image} style={styles.mealImage} />
+                <TouchableOpacity 
+                  style={styles.heartButton}
+                  onPress={() => console.log('Heart pressed')}
+                >
+                  <Ionicons name="heart-outline" size={20} color="#666" />
+                </TouchableOpacity>
                 
-                {/* Content on the right */}
-                <View style={styles.mealInfo}>
-                  <Text style={styles.mealName}>{meal.name}</Text>
-                  <Text style={styles.mealDescription}>{meal.description}</Text>
+                {/* Card Content - Horizontal Layout */}
+                <View style={styles.cardContent}>
+                  {/* Image on the left */}
+                  <Image source={meal.image} style={styles.mealImage} />
                   
-                  <View style={styles.caloriesContainer}>
-                    <Ionicons name="time-outline" size={14} color="#666" />
-                    <Text style={styles.caloriesText}>{meal.calories}</Text>
-                  </View>
-                  
-                  <View style={styles.tagsContainer}>
-                    {meal.tags.map((tag, index) => (
-                      <View key={index} style={styles.tag}>
-                        <Text style={styles.tagText}>{tag}</Text>
-                      </View>
-                    ))}
-                  </View>
-                  
-                  <View style={styles.actionButtons}>
-                    <TouchableOpacity 
-                      style={styles.orderButton}
-                      onPress={() => handleOrder(meal)}
-                    >
-                      <Text style={styles.orderButtonText}>Order</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.addToPlanButton}
-                      onPress={() => handleAddToPlan(meal)}
-                    >
-                      <Text style={styles.addToPlanButtonText}>Add to Plan</Text>
-                    </TouchableOpacity>
+                  {/* Content on the right */}
+                  <View style={styles.mealInfo}>
+                    <Text style={styles.mealName}>{meal.name}</Text>
+                    <Text style={styles.mealDescription}>{meal.description}</Text>
+                    
+                    <View style={styles.caloriesContainer}>
+                      <Ionicons name="time-outline" size={14} color="#666" />
+                      <Text style={styles.caloriesText}>{meal.calories}</Text>
+                    </View>
+                    
+                    <View style={styles.tagsContainer}>
+                      {meal.tags.map((tag, index) => (
+                        <View key={index} style={styles.tag}>
+                          <Text style={styles.tagText}>{tag}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    
+                    <View style={styles.actionButtons}>
+                      <TouchableOpacity 
+                        style={styles.orderButton}
+                        onPress={() => handleOrder(meal)}
+                      >
+                        <Text style={styles.orderButtonText}>Order</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.addToPlanButton}
+                        onPress={() => handleAddToPlan(meal)}
+                      >
+                        <Text style={styles.addToPlanButtonText}>Add to Plan</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
         {/* Load More Section */}
         <View style={styles.loadMoreSection}>
-          <Text style={styles.showingText}>Showing 6 of 20 results</Text>
+          <Text style={styles.showingText}>Showing {meals.length} of {meals.length} results</Text>
           <TouchableOpacity style={styles.loadMoreButton}>
             <Text style={styles.loadMoreText}>Load more</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
+      
+      {/* Toast Component */}
+      <MealPlanToast
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        onHide={() => setToastVisible(false)}
+        actionText={toastType === 'cart' ? 'View Cart' : undefined}
+        onActionPress={toastType === 'cart' ? () => router.push('/(customer-tabs)/order') : undefined}
+      />
     </SafeAreaView>
   );
 }

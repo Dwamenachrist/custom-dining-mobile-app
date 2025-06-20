@@ -23,6 +23,20 @@ export default function CheckoutScreen() {
     { type: 'mastercard', last4: '5302', icon: <FontAwesome name="cc-mastercard" size={24} color="#eb001b" /> },
   ];
 
+  const handleEditAddress = () => {
+    // Navigate to address editing screen
+    router.push({
+      pathname: '/location-search',
+      params: {
+        returnTo: '/checkout',
+        currentAddress: deliveryAddress,
+        subtotal,
+        deliveryFee,
+        total
+      }
+    });
+  };
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -39,11 +53,15 @@ export default function CheckoutScreen() {
         <View style={styles.addressBox}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={styles.addressLabel}>Delivery Address</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={handleEditAddress} activeOpacity={0.7}>
               <MaterialIcons name="edit" size={18} color={colors.primary} />
             </TouchableOpacity>
           </View>
-          <Text style={styles.addressText}>{decodeURIComponent(deliveryAddress as string)}</Text>
+          <TouchableOpacity onPress={handleEditAddress} activeOpacity={0.8}>
+            <Text style={styles.addressText}>
+              {deliveryAddress ? decodeURIComponent(deliveryAddress as string) : 'Tap to add delivery address'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Payment Method */}

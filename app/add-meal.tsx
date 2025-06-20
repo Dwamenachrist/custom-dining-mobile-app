@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator, StatusBar, TextInput as RNTextInput } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Button } from '../components/Button';
@@ -7,8 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../auth-context';
-import { api } from '../services/api';
-import { mockApi } from '../services/mockData';
+import api from '../services/api';
 
 const CATEGORIES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 const DIETARY_LABELS = ['Vegetarian', 'Diabetic-Friendly', 'Low-Carb', 'Gluten-Free', 'Vegan'];
@@ -18,7 +17,7 @@ const TIME_SLOTS = ['7am - 10pm', '10am - 2pm', '2pm - 6pm', '6pm - 10pm'];
 export default function AddMealScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const restaurantId = user?.restaurantId || '683c5e59a91c66e8f9486c17'; // Fallback ID for testing
+  const restaurantId = user?.restaurantId || '683c5e59a91c66e8f9486c17';
   const [mealName, setMealName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('Lunch');
@@ -56,10 +55,9 @@ export default function AddMealScreen() {
         dietaryTags: labels,
         restaurantId: restaurantId,
       };
-      console.log('🍽️ Adding meal:', payload);
+      console.log('🍽️ Adding meal to backend:', payload);
       
-      // Comment out backend API call and use mock success instead
-      /*
+      // Use backend API
       const response = await api.post(`/meals`, payload);
       
       if (response.success) {
@@ -68,18 +66,6 @@ export default function AddMealScreen() {
         router.replace('/(restaurant-tabs)/home');
       } else {
         throw new Error(response.message || 'Failed to add meal');
-      }
-      */
-      
-      // Use mock API for development
-      const result = await mockApi.addMeal(payload);
-      
-      if (result.success) {
-        console.log('✅ Mock: Meal added successfully!', result);
-        setIsSubmitting(false);
-        router.replace('/(restaurant-tabs)/home');
-      } else {
-        throw new Error('Failed to add meal');
       }
       
     } catch (e: any) {

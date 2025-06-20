@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../auth-context';
 import { Button } from '../../components/Button';
 import { TextInput } from '../../components/TextInput';
+import { EmailVerificationToast } from '../../components/EmailVerificationToast';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import AuthService from '../../services/authService';
@@ -23,6 +24,7 @@ export default function SignupScreen() {
   const [countryCode, setCountryCode] = useState('+234');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showEmailToast, setShowEmailToast] = useState(false);
 
   // Validation helpers
   const isPasswordValid = password.length >= 8;
@@ -72,11 +74,17 @@ export default function SignupScreen() {
         // Clear any previous errors
         setError('');
 
-        // Show success message and navigate to email verification info
-        alert('Account created successfully! Please check your email to verify your account before logging in.');
+        // Store user info for meal plan builder
+        await AsyncStorage.setItem('userEmail', email);
+        await AsyncStorage.setItem('userName', firstName + ' ' + lastName);
         
-        // Navigate to login screen where user can access the verification flow
-        router.push('/(auth)/customer-login');
+        // Show email verification toast
+        setShowEmailToast(true);
+        
+        // Navigate to meal plan builder after toast is dismissed (or after delay)
+        setTimeout(() => {
+          router.push('/meal-plan-builder');
+        }, 6500); // Slightly longer than toast duration
       } else {
         setError(response.message || 'Signup failed. Please try again.');
       }
@@ -88,25 +96,15 @@ export default function SignupScreen() {
     }
   };
 
-  const handleSocialSignup = (provider: 'google' | 'microsoft' | 'apple') => {
-    console.log(`Signup with ${provider}`);
-    // TODO: Implement social authentication
-  };
-
-  const handleLanguageChange = () => {
-    console.log('Language change pressed');
-  };
-
-
 
   const handleTermsPress = () => {
     console.log('Terms of Use pressed');
-    // TODO: Navigate to terms page
+    router.push('/(auth)/customer-terms' as any);
   };
 
   const handlePrivacyPress = () => {
     console.log('Privacy Policy pressed');
-    // TODO: Navigate to privacy policy page
+    router.push('/(auth)/customer-terms' as any);
   };
 
   return (
@@ -118,7 +116,7 @@ export default function SignupScreen() {
         {/* Logo and Welcome Text */}
         <View className="mb-8 mt-20">
           <Image
-            source={require('../../assets/Logo.png')}
+            source={require('../../assets/icon.png')}
             className="self-center w-24 h-24 mb-6"
             resizeMode="contain"
           />
@@ -266,35 +264,6 @@ export default function SignupScreen() {
             )}
           </View>
 
-          {/* 'Or Create Account Using' Divider */}
-          <View className="flex-row items-center mb-6">
-            <View className="flex-1 h-px bg-gray" />
-            <Text className="mx-4 text-gray">Or Create Account Using</Text>
-            <View className="flex-1 h-px bg-gray" />
-          </View>
-
-          {/* Social Signups */}
-          <View className="flex-row justify-center space-x-6 mb-8">
-            <TouchableOpacity
-              onPress={() => handleSocialSignup('google')}
-              className="p-3 rounded-full"
-              disabled={isLoading}>
-              <Image source={require('../../assets/google.png')} className="w-6 h-6" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => handleSocialSignup('microsoft')}
-              className="p-3 rounded-full"
-              disabled={isLoading}>
-              <Image source={require('../../assets/microsoft.png')} className="w-6 h-6" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => handleSocialSignup('apple')}
-              className="p-3 rounded-full"
-              disabled={isLoading}>
-              <Image source={require('../../assets/apple.png')} className="w-6 h-6" />
-            </TouchableOpacity>
-          </View>
-
           {/* Already Have Account & Language Selector */}
           <View className="mt-4">
             <View className="flex-row justify-center mb-6">
@@ -305,17 +274,17 @@ export default function SignupScreen() {
                 <Text className="font-bold text-primary">Sign In</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              onPress={handleLanguageChange}
-              className="flex-row self-center items-center"
-              disabled={isLoading}>
-              <Text className="text-darkGray">English</Text>
-              <Ionicons name="chevron-down" size={16} color={colors.darkGray} />
-            </TouchableOpacity>
           </View>
 
         </ScrollView>
       </KeyboardAvoidingView>
+      
+      {/* Email Verification Toast */}
+      <EmailVerificationToast
+        visible={showEmailToast}
+        email={email}
+        onClose={() => setShowEmailToast(false)}
+      />
     </SafeAreaView>
   );
 } 

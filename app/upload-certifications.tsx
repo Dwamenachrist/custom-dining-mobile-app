@@ -17,7 +17,47 @@ export default function UploadCertifications() {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handlePickFile = async (index: number) => {
+  const handleBrowseFiles = async () => {
+    setError('');
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf',
+        copyToCacheDirectory: false,
+        multiple: true,
+      });
+      
+      if (result.canceled) return;
+      
+      const pickedFiles = result.assets;
+      
+      // Validate files
+      for (const file of pickedFiles) {
+        if (file.size && file.size > 5 * 1024 * 1024) {
+          setError('File size must be 5MB or less.');
+          return;
+        }
+        if (!file.name.endsWith('.pdf')) {
+          setError('Only PDF files are allowed.');
+          return;
+        }
+      }
+      
+      // Update files array
+      const newFiles = [...files];
+      pickedFiles.forEach((file, index) => {
+        if (index < 2) { // Only allow 2 files max
+          newFiles[index] = file;
+        }
+      });
+      
+      setFiles(newFiles);
+      
+    } catch (e) {
+      setError('Failed to pick files.');
+    }
+  };
+
+  const handlePickSingleFile = async (index: number) => {
     setError('');
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -68,52 +108,79 @@ export default function UploadCertifications() {
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Certification Upload</Text>
       <Text style={styles.instructions}>
-        Please upload a valid certification for verification. {'\n'}
-        1. Corporate Registration(CAC){'\n'}
-        2. Food Safety Certification:{'\n'}
-        <Text style={styles.subInstructions}>
-          ISO 22000: Food Safety Management Systems, or Certification from recognized Nigerian food regulatory authorities
-        </Text>
+        Please upload a valid certification for verification.
       </Text>
+      
+      <View style={styles.requirementsList}>
+        <Text style={styles.requirementItem}>1. Corporate Registration(CAC)</Text>
+        <Text style={styles.requirementItem}>2. Food Safety Certification:</Text>
+        <Text style={styles.subInstructions}>
+          ISO 22000: Food Safety Management Systems, or{'\n'}
+          Certification from recognized Nigerian food regulatory authorities
+        </Text>
+      </View>
+
       <View style={styles.uploadBox}>
-        <Ionicons name="cloud-upload-outline" size={36} color={colors.gray} style={{ marginBottom: 8 }} />
+        <Ionicons name="cloud-upload-outline" size={48} color={colors.gray} style={{ marginBottom: 12 }} />
         <Text style={styles.uploadText}>Drag and Drop here</Text>
         <Text style={styles.uploadText}>or</Text>
+        <TouchableOpacity style={styles.browseButton} onPress={handleBrowseFiles}>
           <Text style={styles.browseText}>Browse files</Text>
-        <View style={{ width: '100%', marginTop: 12 }}>
-          {files.map((file, idx) => (
-            <View key={idx} style={styles.fileRow}>
-              <TouchableOpacity
-                style={styles.filePicker}
-                onPress={() => handlePickFile(idx)}
-                disabled={!!file}
-              >
-                <Ionicons name="document-outline" size={20} color={colors.primary} />
-                <Text style={styles.fileLabel}>{FILE_LABELS[idx]}</Text>
-              </TouchableOpacity>
+        </TouchableOpacity>
+      </View>
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <Text style={styles.acceptedFormat}>Accepted Format: PDF only(max size:5MB each)</Text>
+
+      {/* File List */}
+      <View style={styles.filesList}>
+        {files.map((file, idx) => (
+          <View key={idx} style={styles.fileItem}>
+            <View style={styles.fileIcon}>
+              <Ionicons name="document" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.fileDetails}>
+              <Text style={styles.fileName}>
+                {file ? file.name : `${FILE_LABELS[idx]}.pdf`}
+              </Text>
               {file && (
-                <View style={styles.fileInfo}>
-                  <Text style={styles.fileName}>{file.name}</Text>
+                <View style={styles.progressContainer}>
                   <View style={styles.progressBarBg}>
                     <View style={styles.progressBarFill} />
                   </View>
-                  <TouchableOpacity onPress={() => handleRemoveFile(idx)}>
-                    <Ionicons name="close-circle" size={20} color="#B00020" />
-        </TouchableOpacity>
                 </View>
               )}
             </View>
-          ))}
-        </View>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Text style={styles.acceptedFormat}>Accepted Format: PDF only (max size: 5MB each)</Text>
+            {file ? (
+              <TouchableOpacity onPress={() => handleRemoveFile(idx)} style={styles.removeButton}>
+                <Ionicons name="close-circle" size={20} color="#666" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity 
+                onPress={() => handlePickSingleFile(idx)} 
+                style={styles.addButton}
+              >
+                <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        ))}
       </View>
+
       <TouchableOpacity
-        style={[styles.submitButton, { backgroundColor: files[0] && files[1] && !error ? colors.primary : colors.gray }]}
+        style={[
+          styles.submitButton, 
+          { 
+            backgroundColor: files[0] && files[1] && !error ? colors.primary : colors.gray,
+            opacity: files[0] && files[1] && !error ? 1 : 0.6
+          }
+        ]}
         onPress={handleSubmit}
         disabled={!files[0] || !files[1] || !!error || isSubmitting}
       >
-        <Text style={styles.submitButtonText}>Submit</Text>
+        <Text style={styles.submitButtonText}>
+          {isSubmitting ? 'Submitting...' : 'Submit'}
+        </Text>
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -226,5 +293,51 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 17,
+  },
+  requirementsList: {
+    marginBottom: 18,
+  },
+  requirementItem: {
+    color: '#222',
+    fontSize: 15,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  filesList: {
+    marginBottom: 24,
+  },
+  fileItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  fileIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    backgroundColor: '#E0E0E0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  fileDetails: {
+    flex: 1,
+  },
+  progressContainer: {
+    height: 8,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  removeButton: {
+    padding: 4,
+  },
+  addButton: {
+    padding: 4,
+  },
+  browseButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    marginTop: 8,
   },
 }); 
