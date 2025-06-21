@@ -37,54 +37,102 @@ function RootLayoutNav() {
     // Prepare app resources
     if (loaded && !isLoading) {
       setAppReady(true);
+      console.log('📱 App ready, hiding splash in 3.5s');
+      
       // Hide custom splash after 3.5 seconds (slightly longer than splash animation)
-      setTimeout(() => {
+      const splashTimeout = setTimeout(() => {
+        console.log('🎬 Hiding custom splash screen');
         setShowCustomSplash(false);
       }, 3500);
+
+      return () => clearTimeout(splashTimeout);
     }
   }, [loaded, isLoading]);
 
+  // Failsafe: If splash has been showing for too long, force hide it
   useEffect(() => {
-    // We are still checking for a token, do nothing.
-    if (isLoading || !appReady) return;
+    const failsafeTimeout = setTimeout(() => {
+      if (showCustomSplash) {
+        console.log('⚠️ Failsafe: Force hiding splash screen after 10 seconds');
+        setShowCustomSplash(false);
+        setAppReady(true);
+      }
+    }, 10000); // 10 second failsafe
 
-    const inAuthGroup = segments[0] === '(auth)';
-    const isTerms = segments[0] === 'customer-terms' || segments[0] === 'restaurant-terms';
-    const isUploadCert = segments[0] === 'upload-certifications';
-    const isMealPlanBuilder = segments[0] === 'meal-plan-builder';
-    const isChangePassword = segments[0] === 'change-password';
-    const isCustomerTabs = segments[0] === '(customer-tabs)';
-    const isRestaurantTabs = segments[0] === '(restaurant-tabs)';
-    const isCustomSplash = segments[0] === 'custom-splash';
+    return () => clearTimeout(failsafeTimeout);
+  }, []);
 
-    // Don't interfere with custom splash screen
-    if (showCustomSplash || isCustomSplash) return;
-
-    // If the user is logged in, but they are in the auth flow, redirect them.
-    if (isLoggedIn && inAuthGroup) {
-      // Check user type and redirect accordingly
-      checkUserTypeAndRedirect();
-    } 
-    // If the user is not logged in and not in allowed screens, redirect them to auth.
-    // Note: meal-plan-builder, terms pages, and change-password are accessible during onboarding/forgot password flow
-    else if (!isLoggedIn && !inAuthGroup && !isTerms && !isUploadCert && !isMealPlanBuilder && !isChangePassword) {
-      router.replace('/(auth)/path' as any);
+  useEffect(() => {
+    // Don't do anything while loading or showing splash
+    if (isLoading || !appReady || showCustomSplash) {
+      console.log('⏳ Still loading:', { isLoading, appReady, showCustomSplash });
+      return;
     }
+
+    const currentSegment = segments[0];
+    console.log('🔄 Router check:', { isLoggedIn, currentSegment, segments });
+
+    // Define allowed screens for different states
+    const publicScreens = ['(auth)', 'customer-terms', 'restaurant-terms'];
+    const onboardingScreens = ['meal-plan-builder', 'change-password', 'upload-certifications'];
+    const authScreens = ['(customer-tabs)', '(restaurant-tabs)'];
+
+    // If user is logged in but in auth screens, redirect appropriately
+    if (isLoggedIn && currentSegment === '(auth)') {
+      console.log('✅ Logged in user in auth - redirecting');
+      checkUserStateAndRedirect();
+      return;
+    }
+
+    // If user is not logged in and trying to access protected screens
+    if (!isLoggedIn && !publicScreens.includes(currentSegment) && !onboardingScreens.includes(currentSegment)) {
+      console.log('❌ Not logged in - redirecting to auth');
+      router.replace('/(auth)/path');
+      return;
+    }
+
+    // If we're at the root level and user is logged in, redirect appropriately
+    if (isLoggedIn && (!currentSegment || currentSegment === 'custom-splash')) {
+      console.log('🏠 At root with logged in user - redirecting');
+      checkUserStateAndRedirect();
+      return;
+    }
+
   }, [isLoading, isLoggedIn, segments, appReady, showCustomSplash]);
 
-  const checkUserTypeAndRedirect = async () => {
+  const checkUserStateAndRedirect = async () => {
     try {
       const userType = await AsyncStorage.getItem('userType');
+      const hasUserProfile = await AsyncStorage.getItem('hasUserProfile') === 'true';
+      const forcePasswordChange = await AsyncStorage.getItem('forcePasswordChange') === 'true';
+      
+      console.log('🔍 Simple state check:', { userType, hasUserProfile, forcePasswordChange });
+
+      // Force password change takes priority
+      if (forcePasswordChange) {
+        console.log('🔒 Redirecting to change password');
+        router.replace('/change-password');
+        return;
+      }
+
+      // Check user type and profile
       if (userType === 'customer') {
-        router.replace('/(customer-tabs)/home');
+        if (!hasUserProfile) {
+          console.log('🍽️ Customer needs profile setup');
+          router.replace('/meal-plan-builder');
+        } else {
+          console.log('🏠 Customer home');
+          router.replace('/(customer-tabs)/home');
+        }
       } else if (userType === 'restaurant') {
+        console.log('🏪 Restaurant home');
         router.replace('/(restaurant-tabs)/home');
       } else {
-        // No user type stored, go to path screen
+        console.log('❓ No user type - path selection');
         router.replace('/(auth)/path');
       }
     } catch (error) {
-      console.error('Error checking user type:', error);
+      console.error('❌ Redirect error:', error);
       router.replace('/(auth)/path');
     }
   };

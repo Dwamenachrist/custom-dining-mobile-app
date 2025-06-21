@@ -25,49 +25,47 @@ export interface RestaurantAssetMapping {
   priceRange: string;
 }
 
-// Asset mapping for meal names to actual image files
+// Specific mappings for your backend data - using available meal images
 const MEAL_IMAGE_MAP: { [key: string]: any } = {
-  // Map meal names to actual available images
-  'basmati jollof rice': require('../assets/meals/Basmati Jollof Rice.png'),
-  'fruity oats delight': require('../assets/meals/Fruity Oats delight.png'),
-  'grilled fish and veggies': require('../assets/meals/Grilled Fish and Veggies.png'),
-  'avocado toast and egg': require('../assets/meals/Avocado Toast and Egg.png'),
-  'avocado veggie bowl': require('../assets/meals/Avocado Veggie Bowl.png'),
-  'tofu rice': require('../assets/meals/Tofu Rice.png'),
-  'beans and potato': require('../assets/meals/Beans and Potato.png'),
-  'turkey and salad': require('../assets/meals/Turkey and Salad.png'),
-  'plantain and soup': require('../assets/meals/Plantain and Soup.png'),
-  'plantain and egg sauce': require('../assets/meals/Plantain and Egg sauce.png'),
-  'ofada rice and sauce': require('../assets/meals/Ofada Rice and Sauce.png'),
-  'unripe plantain porridge': require('../assets/meals/Unripe Plantain porridge.png'),
-  'peanut butter toast': require('../assets/meals/Peanut Butter Toast.png'),
-  'fruity pancakes': require('../assets/meals/Fruity pancakes.png'),
-  'moi moi and akamu': require('../assets/meals/Moi moi and Akamu.png'),
-  'almond flour and soup': require('../assets/meals/Almond Flour and Soup.png'),
-  'sauce and yam': require('../assets/meals/Sauce and Yam.png'),
-  'veggie sauce and yam': require('../assets/meals/Veggie Sauce and Yam.png'),
-  // Fallback image
+  'basmati-jollof-rice': require('../assets/meals/Basmati Jollof Rice.png'),
+  'fruity-oats-delight': require('../assets/meals/Fruity Oats delight.png'),
+  'grilled-fish-and-veggies': require('../assets/meals/Grilled Fish and Veggies.png'),
+  'avocado-toast-and-egg': require('../assets/meals/Avocado Toast and Egg.png'),
+  'avocado-veggie-bowl': require('../assets/meals/Avocado Veggie Bowl.png'),
+  'tofu-rice': require('../assets/meals/Tofu Rice.png'),
+  'turkey-and-salad': require('../assets/meals/Turkey and Salad.png'),
+  'beans-and-potato': require('../assets/meals/Beans and Potato.png'),
+  'plantain-and-soup': require('../assets/meals/Plantain and Soup.png'),
+  'plantain-and-egg-sauce': require('../assets/meals/Plantain and Egg sauce.png'),
+  'unripe-plantain-porridge': require('../assets/meals/Unripe Plantain porridge.png'),
+  'ofada-rice-and-sauce': require('../assets/meals/Ofada Rice and Sauce.png'),
+  'moi-moi-and-akamu': require('../assets/meals/Moi moi and Akamu.png'),
+  'peanut-butter-toast': require('../assets/meals/Peanut Butter Toast.png'),
+  'fruity-pancakes': require('../assets/meals/Fruity pancakes.png'),
+  'almond-flour-and-soup': require('../assets/meals/Almond Flour and Soup.png'),
+  'sauce-and-yam': require('../assets/meals/Sauce and Yam.png'),
+  'veggie-sauce-and-yam': require('../assets/meals/Veggie Sauce and Yam.png'),
   'fallback': require('../assets/meals/Basmati Jollof Rice.png'),
 };
 
 const RESTAURANT_IMAGE_MAP: { [key: string]: { image: any, cover: any, rating: number, reviewCount: number, deliveryTime: string, priceRange: string } } = {
-  'green chef kitchen': {
+  'green-chef-kitchen': {
     image: require('../assets/restaurants/Green Chef Kitchen.png'),
     cover: require('../assets/restaurants/Green Chef Kitchen.png'),
     rating: 4.8,
     reviewCount: 120,
-    deliveryTime: '25-35 min',
+    deliveryTime: '20-30 min',
     priceRange: '₦₦₦'
   },
-  'health n healthy': {
+  'health-n-healthy': {
     image: require('../assets/restaurants/Health n Healthy.png'),
     cover: require('../assets/restaurants/Health n Healthy.png'),
     rating: 4.6,
     reviewCount: 89,
-    deliveryTime: '20-30 min',
+    deliveryTime: '25-35 min',
     priceRange: '₦₦'
   },
-  'nok by alara': {
+  'nok-by-alara': {
     image: require('../assets/restaurants/NOK By Alara.png'),
     cover: require('../assets/restaurants/NOK By Alara.png'),
     rating: 4.7,
@@ -75,7 +73,7 @@ const RESTAURANT_IMAGE_MAP: { [key: string]: { image: any, cover: any, rating: n
     deliveryTime: '30-40 min',
     priceRange: '₦₦₦'
   },
-  'addys health kitchen': {
+  'addys-health-kitchen': {
     image: require('../assets/restaurants/Addys Health Kitchen.png'),
     cover: require('../assets/restaurants/Addys Health Kitchen.png'),
     rating: 4.5,
@@ -83,36 +81,12 @@ const RESTAURANT_IMAGE_MAP: { [key: string]: { image: any, cover: any, rating: n
     deliveryTime: '25-35 min',
     priceRange: '₦₦'
   },
-  'nutri pot': {
-    image: require('../assets/restaurants/Nutri Pot.png'),
-    cover: require('../assets/restaurants/Nutri Pot.png'),
-    rating: 4.4,
-    reviewCount: 92,
-    deliveryTime: '30-40 min',
-    priceRange: '₦₦'
-  },
-  'so fresh': {
-    image: require('../assets/restaurants/So Fresh.png'),
-    cover: require('../assets/restaurants/So Fresh.png'),
-    rating: 4.3,
-    reviewCount: 65,
-    deliveryTime: '20-30 min',
-    priceRange: '₦₦'
-  },
-  'maubbys salad': {
-    image: require('../assets/restaurants/Maubbys Salad.png'),
-    cover: require('../assets/restaurants/Maubbys Salad.png'),
-    rating: 4.2,
-    reviewCount: 54,
-    deliveryTime: '25-35 min',
-    priceRange: '₦₦'
-  },
-  'green grill restaurant': {
+  'green-grill-restaurant': {
     image: require('../assets/restaurants/Green Grill Resturant.png'),
     cover: require('../assets/restaurants/Green Grill Resturant.png'),
-    rating: 4.1,
-    reviewCount: 43,
-    deliveryTime: '35-45 min',
+    rating: 4.4,
+    reviewCount: 112,
+    deliveryTime: '30-40 min',
     priceRange: '₦₦₦'
   },
   'fallback': {
@@ -125,38 +99,38 @@ const RESTAURANT_IMAGE_MAP: { [key: string]: { image: any, cover: any, rating: n
   }
 };
 
-// Enhanced ratings for meals
+// Enhanced ratings for Nigerian meals
 const MEAL_RATINGS: { [key: string]: { rating: number, reviewCount: number, popularity: number } } = {
   'basmati-jollof-rice': {
-    rating: 4.8,
+    rating: 4.7,
     reviewCount: 234,
-    popularity: 95
+    popularity: 89
   },
   'fruity-oats-delight': {
-    rating: 4.7,
+    rating: 4.8,
     reviewCount: 189,
-    popularity: 89
+    popularity: 92
   },
   'grilled-fish-and-veggies': {
     rating: 4.6,
     reviewCount: 156,
-    popularity: 82
+    popularity: 85
   },
   'avocado-toast-and-egg': {
     rating: 4.5,
-    reviewCount: 145,
+    reviewCount: 143,
     popularity: 78
   },
   'tofu-rice': {
     rating: 4.4,
-    reviewCount: 123,
-    popularity: 75
+    reviewCount: 98,
+    popularity: 72
   }
 };
 
 // Convert meal name to image key
 function getMealImageKey(mealName: string): string {
-  return mealName.toLowerCase().replace(/\s+/g, '-');
+  return mealName.toLowerCase().replace(/\s+/g, '-').replace(/&/g, 'and');
 }
 
 // Convert restaurant name to image key
@@ -164,20 +138,18 @@ function getRestaurantImageKey(restaurantName: string): string {
   return restaurantName.toLowerCase().replace(/\s+/g, '-');
 }
 
-// Helper function to get meal image by name
+// Simple function to get asset from meal name (for use in components)
 export function getAssetFromMapping(mealName: string): any {
   if (!mealName) return MEAL_IMAGE_MAP['fallback'];
-  
-  const key = mealName.toLowerCase();
+  const key = getMealImageKey(mealName);
   return MEAL_IMAGE_MAP[key] || MEAL_IMAGE_MAP['fallback'];
 }
 
-// Helper function to get restaurant image by name
+// Simple function to get restaurant asset
 export function getRestaurantAssetFromMapping(restaurantName: string): any {
-  if (!restaurantName) return RESTAURANT_IMAGE_MAP['fallback'];
-  
-  const key = restaurantName.toLowerCase();
-  return RESTAURANT_IMAGE_MAP[key] || RESTAURANT_IMAGE_MAP['fallback'];
+  if (!restaurantName) return RESTAURANT_IMAGE_MAP['fallback'].image;
+  const key = getRestaurantImageKey(restaurantName);
+  return RESTAURANT_IMAGE_MAP[key]?.image || RESTAURANT_IMAGE_MAP['fallback'].image;
 }
 
 // Fetch and map backend data with local assets

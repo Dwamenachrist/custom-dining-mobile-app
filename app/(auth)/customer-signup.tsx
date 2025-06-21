@@ -74,16 +74,16 @@ export default function SignupScreen() {
         // Clear any previous errors
         setError('');
 
-        // Store user info for meal plan builder
+        // Store user info for future use
         await AsyncStorage.setItem('userEmail', email);
         await AsyncStorage.setItem('userName', firstName + ' ' + lastName);
         
         // Show email verification toast
         setShowEmailToast(true);
         
-        // Navigate to meal plan builder after toast is dismissed (or after delay)
+        // Navigate to login screen after toast is dismissed (or after delay)
         setTimeout(() => {
-          router.push('/meal-plan-builder');
+          router.push('/(auth)/customer-login');
         }, 6500); // Slightly longer than toast duration
       } else {
         setError(response.message || 'Signup failed. Please try again.');

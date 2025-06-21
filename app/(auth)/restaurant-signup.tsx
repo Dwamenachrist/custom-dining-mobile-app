@@ -76,14 +76,14 @@ export default function SignupScreen() {
         return;
       }
 
-      // Call API service with frontend form data
-      const response = await AuthService.signup({
-        firstName,
-        lastName,
+      // Call API service with restaurant registration data
+      const response = await AuthService.registerRestaurant({
+        username: firstName, // Business name as username
         email,
-        phoneNumber: countryCode + phoneNumber,
         password,
-        confirmPassword,
+        phoneNumber: countryCode + phoneNumber,
+        address: lastName, // Business address
+        city,
       });
 
       if (response.success) {

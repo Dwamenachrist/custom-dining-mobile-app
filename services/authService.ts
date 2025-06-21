@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api, ApiResponse, SignupRequest, SignupFormData, AuthResponse, RegistrationResponse, apiClient } from './api';
+import { api, ApiResponse, SignupRequest, SignupFormData, AuthResponse, RegistrationResponse, LoginResponse, apiClient, User } from './api';
 import { ENDPOINTS } from './config';
 import axios from 'axios';
 import { getApiUrl } from './config';
@@ -131,7 +131,7 @@ class AuthService {
       
       // Get user type from AsyncStorage (set during path selection)
       const userType = await AsyncStorage.getItem('userType') || 'customer';
-      const role = userType === 'customer' ? 'user' : 'admin';
+      const role = userType === 'customer' ? 'user' : 'restaurant'; // Backend expects 'user' for customers
       
       // Transform frontend data to backend format as per API docs
       const backendData = {
@@ -200,22 +200,66 @@ class AuthService {
       console.log('📤 Sending login data:', loginData);
       
       // Make login API call with longer timeout
-      const response = await authApi.post<{ status: string; token: string }>(ENDPOINTS.login, loginData);
+      const response = await authApi.post<LoginResponse>(ENDPOINTS.login, loginData);
       
       if (response.success && response.data) {
         console.log('✅ Login successful!');
+        console.log('🔍 FULL BACKEND RESPONSE:', JSON.stringify(response.data, null, 2));
         
         // Get user type from AsyncStorage (set during path selection)
         const userType = await AsyncStorage.getItem('userType') || 'customer';
         console.log('👤 User type from storage:', userType);
         
+        // Check if backend returned success status
+        if (response.data.status !== 'success') {
+          console.log('❌ Backend status not success:', response.data.status);
+          return {
+            success: false,
+            message: response.data.message || 'Login failed',
+            error: 'Login unsuccessful',
+          };
+        }
+
+        // 🚨 ENFORCE EMAIL VERIFICATION - Critical Security Check
+        console.log('🔍 BACKEND RETURNED:', response.data);
+        console.log('🔍 isEmailVerified value:', response.data.isEmailVerified);
+        console.log('🔍 isEmailVerified type:', typeof response.data.isEmailVerified);
+        
+        // TEMPORARY FIX: Backend login endpoint is missing isEmailVerified field
+        // Until backend is fixed, assume successful login means email is verified
+        let isEmailVerified = response.data.isEmailVerified;
+        
+        if (isEmailVerified === undefined || isEmailVerified === null) {
+          console.log('⚠️ Backend missing isEmailVerified field - assuming verified since login succeeded');
+          // If backend allows login, assume email is verified
+          // Note: This should be fixed in backend to return proper isEmailVerified field
+          isEmailVerified = true;
+        }
+        
+        console.log('📧 Email verification status:', isEmailVerified);
+
+        // Store additional profile flags for routing decisions
+        await AsyncStorage.setItem('hasUserProfile', response.data.hasUserProfile.toString());
+        await AsyncStorage.setItem('forcePasswordChange', response.data.forcePasswordChange.toString());
+        await AsyncStorage.setItem('isEmailVerified', isEmailVerified.toString());
+        console.log('🏠 User profile status:', response.data.hasUserProfile ? 'Complete' : 'Needs setup');
+        console.log('🔒 Force password change:', response.data.forcePasswordChange);
+        console.log('📧 Email verified (corrected):', isEmailVerified);
+        
+        // Double-check: Read back what we just stored
+        const storedEmailVerified = await AsyncStorage.getItem('isEmailVerified');
+        console.log('🔍 Stored email verification status:', storedEmailVerified);
+        
         // Transform backend response to our format
         const authData: AuthResponse = {
           token: response.data.token,
           user: {
-            id: '', // We'll need to decode token or get user info separately
+            id: '', // TODO: Backend should return user ID or we decode from JWT
             email: credentials.email,
-            role: userType === 'customer' ? 'user' : 'admin', // Map userType to role
+            role: userType === 'customer' ? 'user' : 'restaurant', // Map userType to role
+            isEmailVerified: isEmailVerified, // Use corrected verification status
+            hasProfile: response.data.hasUserProfile, // NEW: Add profile status
+            forcePasswordChange: response.data.forcePasswordChange, // NEW: Add password change requirement
           }
         };
         
@@ -225,7 +269,7 @@ class AuthService {
         
         return {
           success: true,
-          message: 'Login successful',
+          message: response.data.message || 'Login successful',
           data: authData,
         };
       }
@@ -260,14 +304,17 @@ class AuthService {
     }
   }
 
-  // 📝 STEP 4: Forgot Password (Email-based reset link)
+  // 📝 STEP 4: Forgot Password - Updated to match API specification
   // This is what happens when user clicks "Forgot Password"
-  async forgotPassword(email: string): Promise<ApiResponse<{ message: string; temporaryPassword?: string }>> {
+  async forgotPassword(email: string): Promise<ApiResponse<{ message: string }>> {
     try {
-      console.log('📧 Sending password reset email...');
+      console.log('📧 Sending password reset email to:', email);
       
       // Call the forgot password API endpoint with longer timeout
-      const response = await authApi.post<{ status: string; message: string; temporaryPassword?: string; tempPassword?: string; temporary_password?: string }>(ENDPOINTS.forgotPassword, { email });
+      const response = await authApi.post<{ status: string; message: string }>(
+        ENDPOINTS.forgotPassword, 
+        { email }
+      );
       
       // Check if the API call was successful
       if (response.success && response.data) {
@@ -276,28 +323,14 @@ class AuthService {
         
         if (isSuccess) {
           console.log('✅ Password reset link sent successfully');
-          
-          // Extract temporary password from various possible field names
-          const temporaryPassword = response.data.temporaryPassword || 
-                                   response.data.tempPassword || 
-                                   response.data.temporary_password;
-          
-          if (temporaryPassword) {
-            console.log('🔑 Temporary password received from backend');
-          }
         } else {
           console.log('❌ Password reset failed:', response.data.message);
         }
       
         return {
           success: isSuccess,
-          message: response.data.message || (isSuccess ? 'Password reset link sent successfully' : 'Failed to send reset link'),
-          data: {
-            message: response.data.message || '',
-            temporaryPassword: response.data.temporaryPassword || 
-                              response.data.tempPassword || 
-                              response.data.temporary_password
-          }
+          message: response.data.message || (isSuccess ? 'Password reset link sent to your email' : 'Failed to send reset link'),
+          data: { message: response.data.message || '' }
         };
       }
       
@@ -328,9 +361,11 @@ class AuthService {
   }
 
   // 📝 NEW: Reset Password with Token
+  
+  // 📝 Reset Password via Email Token (forgot password flow)
   async resetPassword(token: string, newPassword: string): Promise<ApiResponse<{ message: string }>> {
     try {
-      console.log('🔑 Resetting password with token');
+      console.log('🔑 Resetting password with email token');
       
       // Call the reset password API with token as query parameter
       const response = await api.post<{ status: string; message: string }>(
@@ -344,7 +379,7 @@ class AuthService {
         const isSuccess = response.data.status === 'success';
       
         if (isSuccess) {
-          console.log('✅ Password reset successfully');
+          console.log('✅ Password reset successfully via email token');
         } else {
           console.log('❌ Password reset failed:', response.data.message);
         }
@@ -367,17 +402,28 @@ class AuthService {
     }
   }
 
-  // 📝 NEW: Change Password (for logged-in users)
-  async changePassword(currentPassword: string, newPassword: string): Promise<ApiResponse<{ message: string }>> {
+  // 📝 Change Password (for authenticated users with Bearer token)
+  async changePassword(currentPassword: string, newPassword: string, confirmPassword: string): Promise<ApiResponse<{ message: string }>> {
     try {
-      console.log('🔑 Changing password for logged-in user');
+      console.log('🔑 Changing password for authenticated user');
       
-      // Call the change password API (requires authentication)
+      // Validate passwords match
+      if (newPassword !== confirmPassword) {
+        return {
+          success: false,
+          message: 'New password and confirm password do not match',
+          error: 'Password mismatch'
+        };
+      }
+      
+      // Call the change password API (requires Bearer token authentication)
+      // This endpoint uses the reset-password URL but with Bearer token
       const response = await api.post<{ status: string; message: string }>(
-        ENDPOINTS.changePassword, 
+        ENDPOINTS.resetPassword, 
         { 
           currentPassword, 
-          newPassword 
+          newPassword,
+          confirmPassword
         }
       );
       
@@ -387,7 +433,7 @@ class AuthService {
         const isSuccess = response.data.status === 'success';
         
         if (isSuccess) {
-          console.log('✅ Password changed successfully');
+          console.log('✅ Password changed successfully for authenticated user');
         } else {
           console.log('❌ Password change failed:', response.data.message);
         }
@@ -410,35 +456,31 @@ class AuthService {
     }
   }
 
-  // 📝 NEW: Verify Email Token
+  // 📝 NEW: Verify Email Token - Updated to match API specification
   async verifyEmail(token: string): Promise<ApiResponse<{ message: string }>> {
     try {
-      console.log('📧 Verifying email with token');
+      console.log('📧 Verifying email with token:', token.substring(0, 10) + '...');
       
-      // Call the verify email API with token as query parameter
-      const response = await api.get<{ status: string; message: string }>(
+      // Call the verify email API with token as query parameter (GET request)
+      // Note: Using authApiClient for longer timeout on critical operations
+      const response = await authApiClient.get(
         `${ENDPOINTS.verifyEmail}?token=${token}`
       );
       
-      // Check if the API call was successful
-      if (response.success && response.data) {
-        // Check the backend status field
-        const isSuccess = response.data.status === 'success';
+      // Check the backend status field
+      const isSuccess = response.data.status === 'success';
       
-        if (isSuccess) {
-          console.log('✅ Email verified successfully');
-        } else {
-          console.log('❌ Email verification failed:', response.data.message);
-        }
-        
-        return {
-          success: isSuccess,
-          message: response.data.message || (isSuccess ? 'Email verified successfully' : 'Failed to verify email'),
-          data: response.data
-        };
+      if (isSuccess) {
+        console.log('✅ Email verified successfully');
+      } else {
+        console.log('❌ Email verification failed:', response.data.message);
       }
       
-      return response;
+      return {
+        success: isSuccess,
+        message: response.data.message || (isSuccess ? 'Email verified successfully' : 'Failed to verify email'),
+        data: response.data
+      };
     } catch (error) {
       console.error('❌ Verify email error:', error);
       return {
@@ -457,10 +499,11 @@ class AuthService {
       // Use provided email or get from storage
       let userEmail = email;
       if (!userEmail) {
-        userEmail = await AsyncStorage.getItem('userEmail') || undefined;
-        if (!userEmail) {
+        const storedEmail = await AsyncStorage.getItem('userEmail');
+        if (!storedEmail) {
           throw new Error('No email address found. Please sign up again.');
         }
+        userEmail = storedEmail;
       }
       
       // Call the resend verification API
@@ -550,6 +593,28 @@ class AuthService {
     }
   }
 
+  // Check if user has previously signed up (to differentiate first-time vs returning)
+  async hasUserSignedUpBefore(): Promise<boolean> {
+    try {
+      const userData = await AsyncStorage.getItem('user_data');
+      return !!userData;
+    } catch (error) {
+      console.error('❌ Check previous signup error:', error);
+      return false;
+    }
+  }
+
+  // Get stored user data
+  async getStoredUserData(): Promise<User | null> {
+    try {
+      const userData = await AsyncStorage.getItem('user_data');
+      return userData ? JSON.parse(userData) : null;
+    } catch (error) {
+      console.error('❌ Get stored user data error:', error);
+      return null;
+    }
+  }
+
   // 📝 PRIVATE METHODS: Internal helper functions
 
   // Store authentication data (token, user info)
@@ -557,6 +622,10 @@ class AuthService {
     try {
       const operations = [
         AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, authData.token),
+        AsyncStorage.setItem('user_data', JSON.stringify(authData.user)),
+        AsyncStorage.setItem('isLoggedIn', 'true'), // 🔥 FIX: Store login status!
+        AsyncStorage.setItem('userEmail', authData.user.email), // Store email for easy access
+        AsyncStorage.setItem('userName', authData.user.name || authData.user.username || authData.user.email), // Store name
       ];
 
       if (authData.refreshToken) {
@@ -566,7 +635,7 @@ class AuthService {
       }
 
       await Promise.all(operations);
-      console.log('💾 Auth data stored successfully');
+      console.log('💾 Auth data stored successfully (including login status)');
     } catch (error) {
       console.error('❌ Store auth data error:', error);
       // Do not throw error, allow login to proceed
@@ -597,6 +666,33 @@ class AuthService {
     }
   }
 
+  // Store additional restaurant data (frontend-specific)
+  private async storeAdditionalRestaurantData(data: { 
+    phoneNumber?: string; 
+    address?: string; 
+    city?: string; 
+  }): Promise<void> {
+    try {
+      const restaurantData: Record<string, string> = {};
+      
+      if (data.phoneNumber) {
+        restaurantData.phoneNumber = data.phoneNumber;
+      }
+      if (data.address) {
+        restaurantData.address = data.address;
+      }
+      if (data.city) {
+        restaurantData.city = data.city;
+      }
+      
+      await AsyncStorage.setItem('additional_restaurant_data', JSON.stringify(restaurantData));
+      console.log('💾 Additional restaurant data stored successfully');
+    } catch (error) {
+      console.error('❌ Store additional restaurant data error:', error);
+      // Don't throw - this is non-critical
+    }
+  }
+
   // Clear authentication data
   private async clearAuthData(): Promise<void> {
     try {
@@ -604,43 +700,83 @@ class AuthService {
         STORAGE_KEYS.AUTH_TOKEN,
         STORAGE_KEYS.REFRESH_TOKEN,
         STORAGE_KEYS.PHONE_NUMBER,
+        'user_data',
+        'userType', // Clear user type so they can select again
+        'isLoggedIn', // 🔥 FIX: Clear login status!
+        'userEmail', // Clear stored email
+        'userName', // Clear stored name
+        'hasUserProfile', // Clear profile status
+        'forcePasswordChange', // Clear password change flag
+        'isEmailVerified', // Clear email verification status
       ]);
-      console.log('🧹 Auth data cleared successfully');
+      console.log('🧹 Auth data cleared successfully (including login status)');
     } catch (error) {
       console.error('❌ Clear auth data error:', error);
       throw error;
     }
   }
 
-  // Register a new restaurant - UPDATED
-  async registerRestaurant(data: any): Promise<ApiResponse<any>> {
+  // Register a new restaurant - Updated to match new API specification
+  async registerRestaurant(data: {
+    username: string;
+    email: string;
+    password: string;
+    phoneNumber?: string;
+    address?: string;
+    city?: string;
+  }): Promise<ApiResponse<RegistrationResponse>> {
     try {
       console.log('🏪 Starting restaurant registration...');
       
-      // NOTE: The API docs don't show a restaurant signup endpoint
-      // For now, we'll simulate a successful restaurant registration
-      // In production, you'll need to implement the actual restaurant signup endpoint
-      
-      console.log('📤 Restaurant signup data:', data);
-      
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('✅ Restaurant registration successful! (simulated)');
-      
-      return {
-        success: true,
-        message: 'Restaurant account created successfully!',
-        data: {
-          status: 'success',
-          message: 'Restaurant account created successfully!'
-        }
+      // Transform data to match new API requirements
+      const registrationData = {
+        username: data.username,
+        email: data.email,
+        password: data.password,
+        role: 'restaurant' // Fixed role for restaurant registration
       };
-    } catch (error) {
+      
+      console.log('📤 Restaurant signup data for API:', registrationData);
+      
+      // Make API call using the auth API client with longer timeout
+      const response = await authApi.post<RegistrationResponse>(ENDPOINTS.signup, registrationData);
+      
+      if (response.success) {
+        console.log('✅ Restaurant registration successful!');
+        
+        // Store additional restaurant data locally for future use
+        if (data.phoneNumber || data.address || data.city) {
+          await this.storeAdditionalRestaurantData({
+            phoneNumber: data.phoneNumber,
+            address: data.address,
+            city: data.city,
+          });
+        }
+        
+        console.log('💾 Additional restaurant data stored locally');
+      }
+      
+      return response;
+    } catch (error: any) {
       console.error('❌ Restaurant registration error:', error);
+      
+      // Check if it's an axios error with a backend response
+      if (error.response?.data) {
+        const backendMessage = error.response.data.message || 
+                              error.response.data.error ||
+                              `HTTP ${error.response.status}: ${error.response.statusText}`;
+        
+        return {
+          success: false,
+          message: backendMessage,
+          error: error.response.data.error || error.response.statusText,
+        };
+      }
+      
+      // Fallback to generic message if no backend response
       return {
         success: false,
-        message: 'Failed to register restaurant. Please try again.',
+        message: error instanceof Error ? error.message : 'Restaurant registration failed. Please try again.',
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }

@@ -16,7 +16,6 @@ export default function AuthLayout() {
       <Stack.Screen name="restaurant-signup" />
       <Stack.Screen name="restaurant-onboard" />
       <Stack.Screen name="forgot-password" />
-      <Stack.Screen name="reset-password" />
       <Stack.Screen name="reset-password-success" />
       <Stack.Screen name="path" />
       <Stack.Screen name="verify-email" />

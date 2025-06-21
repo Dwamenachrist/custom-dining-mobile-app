@@ -1,5 +1,5 @@
-﻿import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Image, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, TextInput as RNTextInput, Image, Alert } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Button } from '../components/Button';
 import { TextInput } from '../components/TextInput';
@@ -8,89 +8,52 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../auth-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import MealPlanService from '../services/mealPlanService';
-import MealPlanToast from '../components/MealPlanToast';
+import { saveDietaryPreferences, transformMealPlanToDietaryPreferences, MealPlanData } from '../services/api';
 
 const MEAL_GOALS = [
   'Balanced nutrition',
   'Manage diabetes',
   'Weight loss',
   'Plant-based',
-  'Muscle building',
-  'Heart healthy'
 ];
-
-const PLAN_DURATIONS = ['3 days', '5 days', '7 days', '10 days', '15 days', '30 days'];
-
+const PLAN_DURATIONS = ['3 days', '5 days', '10 days', '15 days'];
 const DIETARY_RESTRICTIONS = [
   'Vegetarian',
-  'Vegan',
   'Dairy-free',
-  'Gluten-free',
-  'Sugar-free',
+  'Sugar free',
   'Low-carb',
-  'Keto',
-  'Paleo'
+  'Vegan',
+  'Gluten-free',
 ];
 
-const SAMPLE_MEALS = [
+const DEFAULT_MEALS = [
   {
-    id: 'breakfast-1',
     type: 'Breakfast',
-    name: 'Avocado Toast & Eggs',
-    image: require('../assets/meals/Avocado Toast and Egg.png'),
-    description: 'Healthy avocado toast with perfectly cooked eggs',
-    calories: '320 Cal Per Serving',
-    tags: ['High-Protein', 'Healthy'],
-    price: 4500,
-    restaurant: 'Meal Plan'
+    name: 'Avocado toast & eggs',
+    image: require('../assets/breakfast.png'),
   },
   {
-    id: 'lunch-1',
     type: 'Lunch',
-    name: 'Basmati Jollof Rice',
-    image: require('../assets/meals/Basmati Jollof Rice.png'),
-    description: 'Premium basmati rice cooked in rich tomato sauce',
-    calories: '520 Cal Per Serving',
-    tags: ['Traditional', 'Gluten-Free'],
-    price: 8500,
-    restaurant: 'Meal Plan'
+    name: 'Jollof Quinoa with grilled chicken',
+    image: require('../assets/lunch.png'),
   },
   {
-    id: 'dinner-1',
     type: 'Dinner',
-    name: 'Grilled Fish and Veggies',
-    image: require('../assets/meals/Grilled Fish and Veggies.png'),
-    description: 'Fresh tilapia grilled with steamed vegetables',
-    calories: '320 Cal Per Serving',
-    tags: ['High-Protein', 'Omega-3'],
-    price: 9500,
-    restaurant: 'Meal Plan'
+    name: 'Beans & Plantain',
+    image: require('../assets/dinner.png'),
   },
-  {
-    id: 'snack-1',
-    type: 'Snacks',
-    name: 'Fruity Oats Delight',
-    image: require('../assets/meals/Fruity Oats delight.png'),
-    description: 'Nourishing oats with fresh fruits and chia seeds',
-    calories: '310 Cal Per Serving',
-    tags: ['Healthy', 'Vegetarian'],
-    price: 5000,
-    restaurant: 'Meal Plan'
-  }
 ];
 
 export default function MealPlanBuilderScreen() {
   const [mealGoal, setMealGoal] = useState(MEAL_GOALS[0]);
-  const [planDuration, setPlanDuration] = useState(PLAN_DURATIONS[2]); // Default to 7 days
+  const [planDuration, setPlanDuration] = useState(PLAN_DURATIONS[0]);
   const [restrictions, setRestrictions] = useState<string[]>([]);
   const [disliked, setDisliked] = useState('');
-  const [selectedMeals, setSelectedMeals] = useState(SAMPLE_MEALS);
+  const [meals, setMeals] = useState(DEFAULT_MEALS);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [toastType, setToastType] = useState<'success' | 'error' | 'cart'>('success');
-  
+  const [showDebug, setShowDebug] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string>('');
+  const [backendStatus, setBackendStatus] = useState<string>('Not tested');
   const router = useRouter();
   const auth = useAuth();
 
@@ -100,71 +63,89 @@ export default function MealPlanBuilderScreen() {
     );
   };
 
-  const handleMealToggle = (mealId: string) => {
-    setSelectedMeals(prev => {
-      const isSelected = prev.some(meal => meal.id === mealId);
-      if (isSelected) {
-        return prev.filter(meal => meal.id !== mealId);
-      } else {
-        const mealToAdd = SAMPLE_MEALS.find(meal => meal.id === mealId);
-        return mealToAdd ? [...prev, mealToAdd] : prev;
-      }
-    });
+  const testBackend = async () => {
+    setBackendStatus('Testing...');
+    Alert.alert('Test Backend', 'Backend connection test removed. Use the meal plan generation to test API connectivity.');
+    setBackendStatus('Test removed');
   };
 
   const handleGenerateMealPlan = async () => {
-    if (selectedMeals.length === 0) {
-      setToastVisible(true);
-      setToastMessage('Please select at least one meal for your plan');
-      setToastType('error');
-      return;
-    }
-
     setIsGenerating(true);
+    let debugLog = '🚀 MEAL PLAN BUILDER DEBUG\n\n';
     
     try {
-      // Add all selected meals to the meal plan
-      let successCount = 0;
-      let failCount = 0;
-      
-      for (const meal of selectedMeals) {
-        try {
-          const result = await MealPlanService.addMealToPlan({
-            id: meal.id,
-            name: meal.name,
-            description: meal.description,
-            image: meal.image,
-            tags: meal.tags,
-            calories: meal.calories,
-            price: meal.price,
-            restaurant: meal.restaurant
-          }, meal.type as 'Breakfast' | 'Lunch' | 'Dinner' | 'Snacks');
-          
-          if (result.success) {
-            successCount++;
-          } else {
-            failCount++;
-          }
-        } catch (error) {
-          failCount++;
-          console.error(`Error adding ${meal.name} to plan:`, error);
-        }
-      }
-      
-      // Store meal plan preferences
-      const mealPlanData = {
+      // Prepare meal plan data
+      const mealPlanData: MealPlanData = {
         mealGoal,
         planDuration,
         restrictions,
         disliked,
-        selectedMeals: selectedMeals.map(m => m.id),
-        createdAt: new Date().toISOString()
+        meals
       };
       
-      await AsyncStorage.setItem('mealPlanPreferences', JSON.stringify(mealPlanData));
+      debugLog += '📋 MEAL PLAN DATA:\n';
+      debugLog += `Goal: ${mealGoal}\n`;
+      debugLog += `Duration: ${planDuration}\n`;
+      debugLog += `Restrictions: ${restrictions.join(', ') || 'None'}\n`;
+      debugLog += `Disliked: ${disliked || 'None'}\n`;
+      debugLog += `Meals: ${meals.map(m => m.type).join(', ')}\n\n`;
+      
+      // Transform to backend format
+      const dietaryPreferences = transformMealPlanToDietaryPreferences(mealPlanData);
+      debugLog += '🔄 BACKEND FORMAT:\n';
+      debugLog += `Health Goal: ${dietaryPreferences.healthGoal}\n`;
+      debugLog += `Dietary Restrictions: ${dietaryPreferences.dietaryRestrictions.join(', ')}\n`;
+      debugLog += `Preferred Tags: ${dietaryPreferences.preferredMealTags.join(', ')}\n\n`;
+      
+      // Store meal plan preferences locally
+      await AsyncStorage.setItem('mealPlan', JSON.stringify(mealPlanData));
+      await AsyncStorage.setItem('dietaryPreferences', JSON.stringify(dietaryPreferences));
+      debugLog += '💾 SAVED TO LOCAL STORAGE\n\n';
+      
+      // Try to save to backend (if user has auth token)
+      let backendSaved = false;
+      try {
+        const authToken = await AsyncStorage.getItem('auth_token');
+        debugLog += `🔑 AUTH TOKEN: ${authToken ? 'Found' : 'Not found'}\n`;
+        
+        if (authToken) {
+          debugLog += '📡 SENDING TO BACKEND...\n';
+          debugLog += `URL: https://custom-dining.onrender.com/api/user/profile\n`;
+          debugLog += `Method: POST\n`;
+          debugLog += `Headers: Authorization: Bearer ${authToken.substring(0, 20)}...\n`;
+          debugLog += `Body: ${JSON.stringify(dietaryPreferences, null, 2)}\n\n`;
+          
+          const response = await saveDietaryPreferences(dietaryPreferences);
+          
+          if (response.success) {
+            debugLog += '✅ BACKEND SUCCESS!\n';
+            debugLog += `Response: ${JSON.stringify(response, null, 2)}\n\n`;
+            backendSaved = true;
+            
+            // Mark user profile as complete since backend save was successful
+            await AsyncStorage.setItem('hasUserProfile', 'true');
+            debugLog += '🏠 USER PROFILE MARKED AS COMPLETE\n';
+            
+            // Store email verification status (should already be true if we got this far)
+            await AsyncStorage.setItem('isEmailVerified', 'true');
+            debugLog += '📧 EMAIL VERIFICATION STATUS STORED\n';
+          } else {
+            debugLog += '❌ BACKEND FAILED!\n';
+            debugLog += `Error: ${response.message}\n`;
+            debugLog += `Response: ${JSON.stringify(response, null, 2)}\n\n`;
+          }
+        } else {
+          debugLog += '📱 NO AUTH TOKEN - SAVING LOCALLY ONLY\n\n';
+        }
+      } catch (apiError: any) {
+        debugLog += '🚨 BACKEND API ERROR!\n';
+        debugLog += `Error: ${apiError.message}\n`;
+        debugLog += `Stack: ${apiError.stack}\n\n`;
+      }
       
       // Get stored user email from signup
       const userEmail = await AsyncStorage.getItem('userEmail') || 'user@email.com';
+      debugLog += `👤 USER EMAIL: ${userEmail}\n`;
       
       // Mark user as logged in and store user type
       await AsyncStorage.setItem('userType', 'customer');
@@ -183,24 +164,29 @@ export default function MealPlanBuilderScreen() {
       auth.setVerificationGracePeriod(gracePeriodEnd);
       await AsyncStorage.setItem('verificationGracePeriod', gracePeriodEnd.toString());
       
-      // Show success message
-      const message = successCount > 0 ? 
-        `Meal plan created! ${successCount} meals added successfully${failCount > 0 ? ` (${failCount} failed)` : ''}.` :
-        'Meal plan created but no meals were added. You can add meals later from the menu.';
+      debugLog += '🔐 USER LOGGED IN\n';
+      debugLog += `✅ MEAL PLAN GENERATION COMPLETE!\n`;
+      debugLog += `Backend Saved: ${backendSaved ? 'Yes' : 'No'}\n`;
       
+      setDebugInfo(debugLog);
+      
+      // Show debug info before navigation
       Alert.alert(
-        'Meal Plan Created!',
-        message,
+        'Meal Plan Generated!',
+        `${backendSaved ? '✅ Saved to backend' : '📱 Saved locally only'}\n\nCheck debug panel for details.`,
         [
+          { text: 'View Debug', onPress: () => setShowDebug(true) },
           { text: 'Continue', onPress: () => router.replace('/(customer-tabs)/home') }
         ]
       );
       
     } catch (error: any) {
-      console.error(' Error generating meal plan:', error);
-      setToastVisible(true);
-      setToastMessage('Failed to create meal plan. Please try again.');
-      setToastType('error');
+      debugLog += `❌ FATAL ERROR: ${error.message}\n`;
+      debugLog += `Stack: ${error.stack}\n`;
+      setDebugInfo(debugLog);
+      
+      console.error('❌ Error generating meal plan:', error);
+      Alert.alert('Error', 'There was an issue saving your meal plan. Check debug panel for details.');
     } finally {
       setIsGenerating(false);
     }
@@ -210,283 +196,255 @@ export default function MealPlanBuilderScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.lightGray, marginTop: 60 }}>
       <StatusBar barStyle="dark-content" />
       
-      {/* Header */}
-      <View style={{ 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        paddingHorizontal: 20, 
-        marginBottom: 18 
-      }}>
+      {/* Header with back button */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 18 }}>
         <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 16 }}>
           <Ionicons name="chevron-back" size={24} color={colors.black} />
         </TouchableOpacity>
-        <Text style={{ 
-          fontWeight: 'bold', 
-          fontSize: 18, 
-          color: colors.black, 
-          flex: 1, 
-          textAlign: 'center' 
-        }}>
-          Build Your Meal Plan
+        <Text style={{ fontWeight: 'bold', fontSize: 18, color: colors.black, flex: 1, textAlign: 'center' }}>
+          Build your Meal Plan
         </Text>
-        <View style={{ width: 24 }} />
+        <TouchableOpacity onPress={() => setShowDebug(!showDebug)} style={{ marginLeft: 8 }}>
+          <Ionicons name={showDebug ? "close" : "bug"} size={24} color={colors.primary} />
+        </TouchableOpacity>
       </View>
+
+      {/* Debug Panel */}
+      {showDebug && (
+        <View style={{ backgroundColor: colors.black, margin: 20, padding: 16, borderRadius: 8, marginBottom: 10 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <Text style={{ color: colors.white, fontWeight: 'bold', fontSize: 16 }}>🐛 Debug Panel</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity 
+                onPress={testBackend}
+                style={{ backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 4 }}>
+                <Text style={{ color: colors.white, fontSize: 12, fontWeight: 'bold' }}>Test Backend</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          
+          <Text style={{ color: '#00ff00', fontSize: 12, marginBottom: 8 }}>
+            Backend Status: {backendStatus}
+          </Text>
+          
+          <ScrollView style={{ maxHeight: 200 }}>
+            <Text style={{ color: '#00ff00', fontSize: 10, fontFamily: 'monospace' }}>
+              {debugInfo || 'No debug info yet. Generate meal plan to see data flow.'}
+            </Text>
+          </ScrollView>
+        </View>
+      )}
 
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
         {/* Meal Goals */}
-        <Text style={{ 
-          fontWeight: 'bold', 
-          fontSize: 12, 
-          color: colors.darkGray, 
-          marginBottom: 4 
-        }}>
-          MEAL GOALS
-        </Text>
-        <View style={{ 
-          borderWidth: 1, 
-          borderColor: colors.gray, 
-          borderRadius: 8, 
-          backgroundColor: colors.white, 
-          marginBottom: 16 
-        }}>
+        <Text style={{ fontWeight: 'bold', fontSize: 12, color: colors.darkGray, marginBottom: 4 }}>MEAL GOALS</Text>
+        <View style={{ borderWidth: 1, borderColor: colors.gray, borderRadius: 8, backgroundColor: colors.white, marginBottom: 16 }}>
           <Picker
             selectedValue={mealGoal}
             onValueChange={setMealGoal}
-            style={{ height: 55 }}
-          >
+            style={{ height: 55 }}>
             {MEAL_GOALS.map((goal) => (
               <Picker.Item key={goal} label={goal} value={goal} />
             ))}
           </Picker>
         </View>
-
         {/* Plan Duration */}
-        <Text style={{ 
-          fontWeight: 'bold', 
-          fontSize: 12, 
-          color: colors.darkGray, 
-          marginBottom: 4 
-        }}>
-          PLAN DURATION
-        </Text>
-        <View style={{ 
-          borderWidth: 1, 
-          borderColor: colors.gray, 
-          borderRadius: 8, 
-          backgroundColor: colors.white, 
-          marginBottom: 16 
-        }}>
+        <Text style={{ fontWeight: 'bold', fontSize: 12, color: colors.darkGray, marginBottom: 4 }}>PLAN DURATION</Text>
+        <View style={{ borderWidth: 1, borderColor: colors.gray, borderRadius: 8, backgroundColor: colors.white, marginBottom: 16 }}>
           <Picker
             selectedValue={planDuration}
             onValueChange={setPlanDuration}
-            style={{ height: 55 }}
-          >
-            {PLAN_DURATIONS.map((duration) => (
-              <Picker.Item key={duration} label={duration} value={duration} />
+            style={{ height: 55 }}>
+            {PLAN_DURATIONS.map((d) => (
+              <Picker.Item key={d} label={d} value={d} />
             ))}
           </Picker>
         </View>
-
         {/* Dietary Restrictions */}
-        <Text style={{ 
-          fontWeight: 'bold', 
-          fontSize: 16, 
-          color: colors.black, 
-          marginBottom: 6 
-        }}>
-          Any specific meal preferences?
-        </Text>
-        <Text style={{ 
-          fontWeight: 'bold', 
-          fontSize: 13, 
-          color: colors.darkGray, 
-          marginBottom: 8 
-        }}>
-          Dietary Restrictions
-        </Text>
-        
-        <View style={{ marginBottom: 16 }}>
+        <Text style={{ fontWeight: 'bold', fontSize: 16, color: colors.black, marginBottom: 6 }}>Any specific meal preferences?</Text>
+        <Text style={{ fontWeight: 'bold', fontSize: 13, color: colors.darkGray, marginBottom: 4 }}>Dietary Restrictions</Text>
+        <View style={{ marginBottom: 12 }}>
           {DIETARY_RESTRICTIONS.map((item) => (
             <TouchableOpacity
               key={item}
-              style={{ 
-                flexDirection: 'row', 
-                alignItems: 'center', 
-                marginBottom: 8,
-                paddingVertical: 4
-              }}
-              onPress={() => handleRestrictionToggle(item)}
-            >
+              style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}
+              onPress={() => handleRestrictionToggle(item)}>
               <View style={{
-                width: 20,
-                height: 20,
-                borderWidth: 2,
+                width: 18,
+                height: 18,
+                borderWidth: 1.5,
                 borderColor: colors.primary,
                 borderRadius: 4,
-                marginRight: 12,
+                marginRight: 8,
                 backgroundColor: restrictions.includes(item) ? colors.primary : colors.white,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}>
                 {restrictions.includes(item) && (
-                  <Ionicons name="checkmark" size={14} color={colors.white} />
+                  <Ionicons name="checkmark" size={12} color={colors.white} />
                 )}
               </View>
-              <Text style={{ 
-                fontSize: 15, 
-                color: colors.black,
-                fontWeight: restrictions.includes(item) ? '600' : '400'
-              }}>
-                {item}
-              </Text>
+              <Text style={{ color: colors.darkGray, fontSize: 14 }}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
-
-        {/* Foods to Avoid */}
-        <Text style={{ 
-          fontWeight: 'bold', 
-          fontSize: 13, 
-          color: colors.darkGray, 
-          marginBottom: 4 
-        }}>
-          FOODS TO AVOID (OPTIONAL)
-        </Text>
+        {/* Disliked Ingredients */}
+        <Text style={{ fontWeight: 'bold', fontSize: 13, color: colors.darkGray, marginBottom: 4 }}>Disliked Ingredients</Text>
         <TextInput
-          placeholder="E.g., nuts, shellfish, spicy foods..."
+          placeholder="E.g. mushrooms, onions"
           value={disliked}
           onChangeText={setDisliked}
-          style={{ marginBottom: 20 }}
+          style={{ marginBottom: 18 }}
         />
-
-        {/* Sample Meals Selection */}
-        <Text style={{ 
-          fontWeight: 'bold', 
-          fontSize: 16, 
-          color: colors.black, 
-          marginBottom: 8 
-        }}>
-          Choose Your Starter Meals
+        {/* Customize Daily Meals */}
+        <Text style={{ fontWeight: 'bold', fontSize: 16, color: colors.black, marginBottom: 8 }}>
+          Customize Your Daily Meals
         </Text>
-        <Text style={{ 
-          fontSize: 14, 
-          color: colors.darkGray, 
-          marginBottom: 12 
-        }}>
-          Select meals to include in your plan (you can add more later)
-        </Text>
-
-        <View style={{ marginBottom: 24 }}>
-          {SAMPLE_MEALS.map((meal) => {
-            const isSelected = selectedMeals.some(selected => selected.id === meal.id);
-            return (
-              <TouchableOpacity
-                key={meal.id}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 4, gap: 12, paddingBottom: 8 }}
+          style={{ marginBottom: 18 }}
+        >
+          {meals.map((meal, idx) => (
+            <View
+              key={meal.type}
+              style={{
+                alignItems: 'center',
+                minWidth: 120,
+                marginHorizontal: 2,
+                position: 'relative',
+              }}
+            >
+              {/* Overlapping meal image */}
+              <View style={{ zIndex: 2, position: 'absolute' }}>
+                <Image
+                  source={meal.image}
+                  style={{
+                    width: 90,
+                    height: 90,
+                    borderRadius: 50,
+                    borderColor: colors.lightGray, // Optional: adds a border for separation
+                  }}
+                  resizeMode="cover"
+                />
+              </View>
+              {/* Card */}
+              <View
                 style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: colors.white,
-                  borderRadius: 12,
-                  padding: 12,
-                  marginBottom: 12,
-                  borderWidth: 2,
-                  borderColor: isSelected ? colors.primary : colors.lightGray,
+                  backgroundColor: colors.primary,
+                  borderRadius: 18,
+                  paddingTop: 28, // Leaves space for image overlap
+                  paddingBottom: 12,
+                  paddingHorizontal: 10,
                   shadowColor: '#000',
                   shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 4,
-                  elevation: 2
-                }}
-                onPress={() => handleMealToggle(meal.id)}
-              >
-                <Image 
-                  source={meal.image} 
-                  style={{ width: 60, height: 60, borderRadius: 8, marginRight: 12 }} 
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ 
-                    fontSize: 16, 
-                    fontWeight: '600', 
-                    color: colors.black,
-                    marginBottom: 4
-                  }}>
-                    {meal.name}
-                  </Text>
-                  <Text style={{ 
-                    fontSize: 12, 
-                    color: colors.darkGray,
-                    marginBottom: 4
-                  }}>
-                    {meal.type}  {meal.calories}
-                  </Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
-                    {meal.tags.slice(0, 2).map((tag, index) => (
-                      <View key={index} style={{
-                        backgroundColor: colors.primary,
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
-                        borderRadius: 8
-                      }}>
-                        <Text style={{ 
-                          color: colors.white, 
-                          fontSize: 10, 
-                          fontWeight: '500' 
-                        }}>
-                          {tag}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-                <View style={{
-                  width: 24,
-                  height: 24,
-                  borderWidth: 2,
-                  borderColor: colors.primary,
-                  borderRadius: 12,
-                  backgroundColor: isSelected ? colors.primary : colors.white,
+                  shadowOpacity: 0.10,
+                  shadowRadius: 6,
+                  elevation: 2,
+                  minWidth: 120,
+                  height: 140, // More compact
                   alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  {isSelected && (
-                    <Ionicons name="checkmark" size={16} color={colors.white} />
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
+                  justifyContent: 'flex-end',
+                  marginTop: 50, // Push card down so image overlaps
+                  overflow: 'visible',
+                }}
+              >
+                {/* Meal type */}
+                <Text
+                  style={{
+                    fontWeight: 'bold',
+                    color: colors.white,
+                    fontSize: 15,
+                    marginBottom: 2,
+                    textAlign: 'center',
+                    letterSpacing: 0.1,
+                  }}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {meal.type}
+                </Text>
+                {/* Meal name */}
+                <Text
+                  style={{
+                    color: '#B5C4B1',
+                    fontSize: 11,
+                    textAlign: 'center',
+                    marginBottom: 8,
+                    fontWeight: '500',
+                    lineHeight: 14,
+                    maxWidth: 110,
+                  }}
+                  numberOfLines={2}
+                  ellipsizeMode="tail"
+                >
+                  {meal.name}
+                </Text>
+                {/* Edit button */}
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: colors.white,
+                    borderRadius: 12,
+                    paddingVertical: 2,
+                    paddingHorizontal: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: 22,
+                    minWidth: 40,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.06,
+                    shadowRadius: 1,
+                    elevation: 1,
+                  }}
+                  onPress={() => {}}
+                  activeOpacity={0.85}
+                >
+                  <Text
+                    style={{
+                      color: colors.primary,
+                      fontWeight: '600',
+                      fontSize: 12,
+                      textAlign: 'center',
+                    }}
+                  >
+                    Edit
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+        {/* Review Your Plan */}
+        <Text style={{ fontWeight: 'bold', fontSize: 16, color: colors.black, marginBottom: 8 }}>Review Your Plan</Text>
+        <View style={{ backgroundColor: colors.white, borderRadius: 12, padding: 12, marginBottom: 10 }}>
+          <Text style={{ fontWeight: 'bold', color: colors.darkGray, fontSize: 13 }}>Meal Goal</Text>
+          <Text style={{ color: colors.black, fontSize: 14 }}>{mealGoal}</Text>
         </View>
-
-        {/* Generate Button */}
+        <View style={{ backgroundColor: colors.white, borderRadius: 12, padding: 12, marginBottom: 10 }}>
+          <Text style={{ fontWeight: 'bold', color: colors.darkGray, fontSize: 13 }}>Duration</Text>
+          <Text style={{ color: colors.black, fontSize: 14 }}>{planDuration}</Text>
+        </View>
+        <View style={{ backgroundColor: colors.white, borderRadius: 12, padding: 12, marginBottom: 10 }}>
+          <Text style={{ fontWeight: 'bold', color: colors.darkGray, fontSize: 13 }}>Meal Preference</Text>
+          <Text style={{ color: colors.black, fontSize: 14 }}>{restrictions.join(', ') || '-'}</Text>
+        </View>
+        <View style={{ backgroundColor: colors.white, borderRadius: 12, padding: 12, marginBottom: 18 }}>
+          <Text style={{ fontWeight: 'bold', color: colors.darkGray, fontSize: 13 }}>Selected Meals</Text>
+          {meals.map((meal) => (
+            <Text key={meal.type} style={{ color: colors.black, fontSize: 14 }}>
+              <Text style={{ fontWeight: 'bold' }}>{meal.type}</Text> — {meal.name}
+            </Text>
+          ))}
+        </View>
         <Button
-          title={isGenerating ? 'Creating Your Plan...' : 'Create My Meal Plan'}
+          title={isGenerating ? "Generating..." : "Generate Meal Plan"}
           variant="primary"
           onPress={handleGenerateMealPlan}
           disabled={isGenerating}
-          style={{ 
-            marginTop: 8,
-            paddingVertical: 16
-          }}
         />
-
-        <Text style={{ 
-          fontSize: 12, 
-          color: colors.darkGray, 
-          textAlign: 'center', 
-          marginTop: 12,
-          lineHeight: 16
-        }}>
-          Your meal plan will be saved and you can modify it anytime from your profile
-        </Text>
       </ScrollView>
-      
-      {/* Toast Component */}
-      <MealPlanToast
-        visible={toastVisible}
-        message={toastMessage}
-        type={toastType}
-        onHide={() => setToastVisible(false)}
-      />
     </SafeAreaView>
   );
-}
+} 

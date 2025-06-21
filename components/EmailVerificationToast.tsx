@@ -17,8 +17,10 @@ export const EmailVerificationToast: React.FC<EmailVerificationToastProps> = ({
 }) => {
   const [animation] = useState(new Animated.Value(0));
 
+  console.log('🍞 EmailVerificationToast rendered with visible:', visible, 'email:', email);
+
   useEffect(() => {
-    
+    console.log('🍞 EmailVerificationToast useEffect triggered, visible:', visible);
     if (visible) {
       console.log('🍞 Starting toast animation...');
       // Slide in from top
@@ -98,11 +100,14 @@ export const EmailVerificationToast: React.FC<EmailVerificationToastProps> = ({
           {/* Message */}
           <View className="flex-1">
             <Text className="text-sm font-semibold text-gray-900 mb-1">
-              Verify Your Email
+              Email Verification Required
             </Text>
             <Text className="text-xs text-gray-600 leading-4 mb-2">
               We've sent a verification link to{' '}
               <Text className="font-medium text-gray-800">{email}</Text>
+            </Text>
+            <Text className="text-xs text-red-600 font-medium leading-4 mb-1">
+              ⚠️ You must verify your email before you can sign in.
             </Text>
             <Text className="text-xs text-gray-500 leading-4">
               Check your inbox and click the link to activate your account.

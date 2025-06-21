@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // You might use AsyncStorage for persistence in a real app
 // import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -39,14 +40,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        // Here you would check for a token from AsyncStorage
-        // For now, we simulate a small delay.
-        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log('🔍 Auth Context: Checking authentication...');
+        
+        // Just check for token and login status - simplified
+        const [token, loginStatus, userType, userName, userEmail] = await Promise.all([
+          AsyncStorage.getItem('auth_token'),
+          AsyncStorage.getItem('isLoggedIn'),
+          AsyncStorage.getItem('userType'),
+          AsyncStorage.getItem('userName'),
+          AsyncStorage.getItem('userEmail')
+        ]);
+        
+        console.log('🔍 Auth check:', { 
+          hasToken: !!token, 
+          loginStatus, 
+          userType, 
+          userName, 
+          userEmail 
+        });
+        
+        // Simple check: if we have token and login status is true
+        if (token && loginStatus === 'true') {
+          // Create user object if we have user info
+          let userObj = null;
+          if (userName || userEmail) {
+            userObj = {
+              id: userEmail || 'user',
+              email: userEmail || '',
+              role: userType || 'customer',
+              isEmailVerified: true // Assume verified if logged in
+            };
+          }
+          
+          setIsLoggedIn(true);
+          setUser(userObj);
+          setJwt(token);
+          setIsEmailVerified(true);
+          
+          console.log('✅ Auth restored:', { userType, hasUser: !!userObj });
+        } else {
+          console.log('ℹ️ No authentication found');
+          setIsLoggedIn(false);
+          setUser(null);
+          setJwt(null);
+          setIsEmailVerified(false);
+        }
       } catch (e) {
-        console.error("Failed to check auth status", e);
+        console.error("❌ Auth check failed:", e);
+        setIsLoggedIn(false);
+        setUser(null);
+        setJwt(null);
+        setIsEmailVerified(false);
       } finally {
-        // Finished checking, tell the app to proceed with routing.
         setIsLoading(false);
+        console.log('✅ Auth check completed');
       }
     };
 

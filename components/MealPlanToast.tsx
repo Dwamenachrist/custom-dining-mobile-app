@@ -1,147 +1,227 @@
-﻿import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, Animated } from 'react-native';
+﻿import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Animated,
+  Dimensions,
+  StyleSheet,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { colors } from '../theme/colors';
 
 interface MealPlanToastProps {
   visible: boolean;
-  message: string;
-  type: 'success' | 'error' | 'cart';
-  onHide: () => void;
-  actionText?: string;
-  onActionPress?: () => void;
+  onDismiss: () => void;
+  userName?: string;
 }
 
-export default function MealPlanToast({ 
-  visible, 
-  message, 
-  type, 
-  onHide, 
-  actionText, 
-  onActionPress 
-}: MealPlanToastProps) {
-  const slideAnim = useRef(new Animated.Value(-100)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
+const { width } = Dimensions.get('window');
+
+export function MealPlanToast({ visible, onDismiss, userName = 'there' }: MealPlanToastProps) {
+  const [slideAnim] = useState(new Animated.Value(-200));
+  const [fadeAnim] = useState(new Animated.Value(0));
+  const router = useRouter();
 
   useEffect(() => {
     if (visible) {
+      // Slide in from top and fade in
       Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
+        Animated.spring(slideAnim, {
+          toValue: 60,
           useNativeDriver: true,
+          tension: 100,
+          friction: 8,
         }),
-        Animated.timing(opacityAnim, {
+        Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 300,
           useNativeDriver: true,
         }),
       ]).start();
 
+      // Auto dismiss after 8 seconds
       const timer = setTimeout(() => {
-        hideToast();
-      }, 3000);
+        handleDismiss();
+      }, 8000);
 
       return () => clearTimeout(timer);
+    } else {
+      // Slide out and fade out
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: -200,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
     }
   }, [visible]);
 
-  const hideToast = () => {
+  const handleDismiss = () => {
     Animated.parallel([
       Animated.timing(slideAnim, {
-        toValue: -100,
-        duration: 250,
+        toValue: -200,
+        duration: 300,
         useNativeDriver: true,
       }),
-      Animated.timing(opacityAnim, {
+      Animated.timing(fadeAnim, {
         toValue: 0,
-        duration: 250,
+        duration: 300,
         useNativeDriver: true,
       }),
     ]).start(() => {
-      onHide();
+      onDismiss();
     });
   };
 
-  const getToastStyle = () => {
-    switch (type) {
-      case 'success':
-        return { backgroundColor: '#10B981', icon: 'checkmark-circle' as const };
-      case 'error':
-        return { backgroundColor: '#EF4444', icon: 'alert-circle' as const };
-      case 'cart':
-        return { backgroundColor: colors.primary, icon: 'bag-add' as const };
-      default:
-        return { backgroundColor: colors.primary, icon: 'information-circle' as const };
-    }
+  const handleCompletePlan = () => {
+    handleDismiss();
+    router.push('/meal-plan-builder');
   };
-
-  const toastStyle = getToastStyle();
 
   if (!visible) return null;
 
   return (
     <Animated.View
-      style={{
-        position: 'absolute',
-        top: 60,
-        left: 16,
-        right: 16,
-        zIndex: 1000,
-        transform: [{ translateY: slideAnim }],
-        opacity: opacityAnim,
-      }}
+      style={[
+        styles.container,
+        {
+          transform: [{ translateY: slideAnim }],
+          opacity: fadeAnim,
+        },
+      ]}
     >
-      <View
-        style={{
-          backgroundColor: toastStyle.backgroundColor,
-          borderRadius: 12,
-          padding: 16,
-          flexDirection: 'row',
-          alignItems: 'center',
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          elevation: 8,
-        }}
-      >
-        <Ionicons name={toastStyle.icon} size={24} color="white" style={{ marginRight: 12 }} />
-        
-        <Text
-          style={{
-            flex: 1,
-            color: 'white',
-            fontSize: 14,
-            fontWeight: '500',
-            lineHeight: 20,
-          }}
-          numberOfLines={2}
-        >
-          {message}
-        </Text>
-
-        {actionText && onActionPress && (
-          <TouchableOpacity
-            onPress={onActionPress}
-            style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.2)',
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 8,
-              marginLeft: 12,
-            }}
-          >
-            <Text style={{ color: 'white', fontSize: 12, fontWeight: '600' }}>
-              {actionText}
-            </Text>
+      <View style={styles.toast}>
+        {/* Icon and Close Button */}
+        <View style={styles.header}>
+          <View style={styles.iconContainer}>
+            <Ionicons name="restaurant" size={24} color={colors.primary} />
+          </View>
+          <TouchableOpacity onPress={handleDismiss} style={styles.closeButton}>
+            <Ionicons name="close" size={20} color={colors.gray} />
           </TouchableOpacity>
-        )}
+        </View>
 
-        <TouchableOpacity onPress={hideToast} style={{ marginLeft: 8, padding: 4 }}>
-          <Ionicons name="close" size={20} color="white" />
-        </TouchableOpacity>
+        {/* Content */}
+        <View style={styles.content}>
+          <Text style={styles.title}>
+            🎯 Welcome back, {userName}!
+          </Text>
+          <Text style={styles.message}>
+            Complete your meal plan to unlock personalized restaurants, tailored meal recommendations, and a dining experience made just for you! ✨
+          </Text>
+        </View>
+
+        {/* Action Buttons */}
+        <View style={styles.actions}>
+          <TouchableOpacity onPress={handleDismiss} style={styles.laterButton}>
+            <Text style={styles.laterText}>Maybe Later</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleCompletePlan} style={styles.completeButton}>
+            <Text style={styles.completeText}>Complete Profile</Text>
+            <Ionicons name="arrow-forward" size={16} color={colors.white} style={{ marginLeft: 4 }} />
+          </TouchableOpacity>
+        </View>
       </View>
     </Animated.View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    top: 0,
+    left: 16,
+    right: 16,
+    zIndex: 1000,
+    elevation: 1000,
+  },
+  toast: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: `${colors.primary}20`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  content: {
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.black,
+    marginBottom: 8,
+  },
+  message: {
+    fontSize: 14,
+    color: colors.darkGray,
+    lineHeight: 20,
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  laterButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  laterText: {
+    fontSize: 14,
+    color: colors.gray,
+    fontWeight: '500',
+  },
+  completeButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  completeText: {
+    fontSize: 14,
+    color: colors.white,
+    fontWeight: '600',
+  },
+});

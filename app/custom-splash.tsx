@@ -40,7 +40,7 @@ export default function CustomSplashScreen() {
     
     textOpacity.value = withDelay(400, withTiming(1, { duration: 600 }));
 
-    // Note: Navigation is handled by the main layout
+    console.log('🎬 Splash animation started');
   };
 
   const logoAnimatedStyle = useAnimatedStyle(() => ({

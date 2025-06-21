@@ -53,7 +53,7 @@ export default function RestaurantHomeScreen() {
       // Load meals
       const mealsResponse = await api.get(`/meals/restaurant/${restaurantId}`);
       
-      if (mealsResponse.success && mealsResponse.data && Array.isArray(mealsResponse.data)) {
+      if (mealsResponse.success && mealsResponse.data) {
         const mealData = mealsResponse.data.slice(0, 3).map((meal: any) => ({
           id: meal._id || meal.id,
           name: meal.name,

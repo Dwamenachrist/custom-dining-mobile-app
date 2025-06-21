@@ -1,6 +1,6 @@
 // Environment configuration
 export const ENV = {
-
+  DEV: 'http://localhost:3006/api',
   PROD: 'https://custom-dining.onrender.com/api',
 } as const;
 
@@ -27,9 +27,6 @@ export const ENDPOINTS = {
   changePassword: '/auth/change-password',
   verifyEmail: '/auth/verify-email',
   resendVerification: '/auth/resend-verification',
-  // sendOTPMobile: '/auth/send-otp-mobile', // Removed - not used
-  // sendOTPEmail: '/auth/send-otp-email', // Removed - not used
-  // verifyOTP: '/auth/verify-otp', // Removed - not used
   refreshToken: '/auth/refresh-token',
   
   // User

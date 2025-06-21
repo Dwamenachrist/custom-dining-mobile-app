@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, Image, ScrollView, TouchableOpacity, StatusBar, SafeAreaView, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getAllMeals, Meal as BackendMeal } from '../../services/api';
 import { getHybridMealById } from '../../services/hybridMealService';
 import { useCart } from '../../cart-context';
 import { CartToast } from '../../components/CartToast';
@@ -19,8 +18,7 @@ interface MealDetail {
     carbs: number;
     fat: number;
     fiber?: number;
-    sodium?: number;
-    sugars?: number;
+    iron?: number;
   };
   allergens: string[];
   restaurantId: string | null;
@@ -61,13 +59,12 @@ export default function MealDetailScreen() {
           description: foundMeal.description,
           dietaryTags: foundMeal.dietaryTags,
           nutritionalInfo: {
-            calories: foundMeal.nutritionalInfo?.calories || 400,
-            protein: foundMeal.nutritionalInfo?.protein || 20,
-            carbs: foundMeal.nutritionalInfo?.carbs || 30,
-            fat: foundMeal.nutritionalInfo?.fat || 15,
-            fiber: foundMeal.nutritionalInfo?.fiber || 5,
-            sodium: foundMeal.nutritionalInfo?.sodium || 2000,
-            sugars: foundMeal.nutritionalInfo?.sugars || 30
+            calories: foundMeal.nutritionalInfo?.calories ?? 400,
+            protein: foundMeal.nutritionalInfo?.protein ?? 20,
+            carbs: foundMeal.nutritionalInfo?.carbs ?? 30,
+            fat: foundMeal.nutritionalInfo?.fat ?? 15,
+            fiber: foundMeal.nutritionalInfo?.fiber ?? 5,
+            iron: 10
           },
           allergens: foundMeal.allergens,
           restaurantId: foundMeal.restaurantId,
@@ -94,8 +91,7 @@ export default function MealDetailScreen() {
             carbs: 30,
             fat: 15,
             fiber: 5,
-            sodium: 2000,
-            sugars: 30
+            iron: 10
           },
           allergens: [],
           restaurantId: restaurantId as string || null,
@@ -182,7 +178,7 @@ export default function MealDetailScreen() {
         <View 
           className="mb-6 overflow-hidden items-center justify-center"
           style={{
-            width: 350,
+            width: 375,
             height: 260,
             borderRadius: 16,
             backgroundColor: '#758F76'
@@ -191,8 +187,8 @@ export default function MealDetailScreen() {
           <Image 
             source={meal.image} 
             style={{
-              width: 320,
-              height: 220,
+              width: 200,
+              height: 200,
               borderRadius: 12,
             }}
             resizeMode="cover"
@@ -265,13 +261,9 @@ export default function MealDetailScreen() {
             <Text className="text-sm text-gray-900 font-medium">{meal.nutritionalInfo.fat} g</Text>
           </View>
           <View className="flex-row justify-between items-center py-2">
-            <Text className="text-sm text-gray-600">Sodium</Text>
-            <Text className="text-sm text-gray-900 font-medium">{meal.nutritionalInfo.sodium} mg</Text>
-          </View>
-          <View className="flex-row justify-between items-center py-2">
-            <Text className="text-sm text-gray-600">Sugars</Text>
-            <Text className="text-sm text-gray-900 font-medium">{meal.nutritionalInfo.sugars} g</Text>
-          </View>
+            <Text className="text-sm text-gray-600">Iron</Text>
+            <Text className="text-sm text-gray-900 font-medium">{meal.nutritionalInfo.iron} mg</Text>
+            </View>
         </View>
       </ScrollView>
 

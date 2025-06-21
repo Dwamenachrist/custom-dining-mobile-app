@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Image, TouchableOpacity, Switch, SafeAreaView, StatusBar, ActivityIndicator} from 'react-native';
+import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Image, TouchableOpacity, Switch, SafeAreaView, StatusBar, ActivityIndicator, Alert} from 'react-native';
 import { useAuth } from '../../auth-context';
 import { useRouter } from 'expo-router';
 import { Button } from '../../components/Button';
@@ -83,12 +83,88 @@ export default function LoginScreen() {
 
       if (response.success) {
         setIsLoggedIn(true);
-        // The RootLayout will automatically redirect to the (tabs) stack.
+        
+        // Check user profile status for smart routing
+        const hasUserProfile = await AsyncStorage.getItem('hasUserProfile') === 'true';
+        const forcePasswordChange = await AsyncStorage.getItem('forcePasswordChange') === 'true';
+        
+        console.log('🏠 Restaurant profile status:', hasUserProfile ? 'Complete' : 'Needs setup');
+        console.log('🔒 Force password change:', forcePasswordChange);
+        
+        // Smart routing based on backend response
+        if (forcePasswordChange) {
+          // Restaurant must change password first
+          router.replace('/change-password');
+        } else if (!hasUserProfile) {
+          // Restaurant needs to complete profile setup (restaurant profile setup would be different from meal plan)
+          // For now, redirect to restaurant home - you can create a restaurant onboarding later
+          router.replace('/(restaurant-tabs)/home');
+        } else {
+          // Restaurant is fully set up, go to home
+          router.replace('/(restaurant-tabs)/home');
+        }
       } else {
-        setError(response.message || 'Login failed. Please check your credentials.');
+        // Handle email verification error specifically for restaurants
+        if (response.message?.includes('verify your email')) {
+          setError('Please verify your business email before logging in.');
+          
+          // Show alert with resend option
+          Alert.alert(
+            '📧 Email Verification Required',
+            'You must verify your business email address before logging in. Would you like us to resend the verification email?',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { 
+                text: 'Resend Email', 
+                onPress: async () => {
+                  try {
+                    const result = await AuthService.resendVerificationEmail(email);
+                    if (result.success) {
+                      Alert.alert('✅ Email Sent!', 'Please check your business email inbox for the verification link.');
+                    } else {
+                      Alert.alert('❌ Failed', result.message || 'Failed to resend email.');
+                    }
+                  } catch (err) {
+                    Alert.alert('❌ Error', 'Failed to resend verification email.');
+                  }
+                }
+              }
+            ]
+          );
+        } else {
+          setError(response.message || 'Login failed. Please check your credentials.');
+        }
       }
-    } catch (error) {
-      setError('An unexpected error occurred. Please try again.');
+    } catch (error: any) {
+      // Handle email verification error from catch block too
+      if (error.message?.includes('verify your email')) {
+        setError('Please verify your business email before logging in.');
+        
+        Alert.alert(
+          '📧 Email Verification Required',
+          'You must verify your business email address before logging in. Would you like us to resend the verification email?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Resend Email', 
+              onPress: async () => {
+                try {
+                  const result = await AuthService.resendVerificationEmail(email);
+                  if (result.success) {
+                    Alert.alert('✅ Email Sent!', 'Please check your business email inbox for the verification link.');
+                  } else {
+                    Alert.alert('❌ Failed', result.message || 'Failed to resend email.');
+                  }
+                } catch (err) {
+                  Alert.alert('❌ Error', 'Failed to resend verification email.');
+                }
+              }
+            }
+          ]
+        );
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }

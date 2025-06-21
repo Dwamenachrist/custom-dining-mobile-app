@@ -2,6 +2,7 @@
 import { View, Text, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, TextInput as RNTextInput, ActivityIndicator, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../../theme/colors';
 import { useAuth } from '../../auth-context';
 import { Button } from '../../components/Button';

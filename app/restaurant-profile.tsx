@@ -1,313 +1,269 @@
-﻿import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Dimensions } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, StatusBar, Dimensions, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { colors } from '../theme/colors';
-import { useAuth } from '../auth-context';
-import { useCart } from '../cart-context';
-import MealPlanService from '../services/mealPlanService';
-import MealPlanToast from '../components/MealPlanToast';
+import { Button } from '../components/Button';
+import { getHybridMealsByRestaurant, getHybridRestaurants } from '../services/hybridMealService';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-interface Restaurant {
-  id: string;
-  name: string;
-  rating: number;
-  reviewCount: number;
-  image: any;
-  tags: string[];
-  distance: string;
-  deliveryTime: string;
-  description?: string;
-}
-
-interface Meal {
-  id: string;
-  name: string;
-  description: string;
-  image: any;
-  price: number;
-  tags: string[];
-  calories: string;
-}
+const { width: screenWidth } = Dimensions.get('window');
 
 export default function RestaurantProfileScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams();
-  const { isLoggedIn } = useAuth();
-  const { addToCart } = useCart();
-  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const { id, name, rating, reviewCount, imageSource, tags, distance, deliveryTime } = useLocalSearchParams();
+  const [restaurant, setRestaurant] = useState<any>(null);
+  const [meals, setMeals] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [toastType, setToastType] = useState<'success' | 'error' | 'cart'>('success');
-
-  // Sample menu items for the restaurant
-  const menuItems: Meal[] = [
-    {
-      id: '1',
-      name: 'Fruity Oats',
-      description: 'Delicious oats with fresh fruits',
-      image: require('../assets/meals/Fruity Oats delight.png'),
-      price: 3000,
-      tags: ['Healthy', 'Breakfast'],
-      calories: '310 Cal'
-    },
-    {
-      id: '2',
-      name: 'Avocado Veggie Bowl',
-      description: 'Fresh avocado with mixed vegetables',
-      image: require('../assets/meals/Avocado Veggie Bowl.png'),
-      price: 4000,
-      tags: ['Vegan', 'Healthy'],
-      calories: '280 Cal'
-    },
-    {
-      id: '3',
-      name: 'Grilled Chicken',
-      description: 'Perfectly grilled chicken with spices',
-      image: require('../assets/meals/Grilled Fish and Veggies.png'),
-      price: 6000,
-      tags: ['Protein', 'Grilled'],
-      calories: '420 Cal'
-    }
-  ];
 
   useEffect(() => {
-    // Parse restaurant data from params
-    try {
-      const restaurantData: Restaurant = {
-        id: params.id as string || '1',
-        name: params.name as string || 'GreenChef Kitchen',
-        rating: parseFloat(params.rating as string) || 4.8,
-        reviewCount: parseInt(params.reviewCount as string) || 120,
-        image: params.imageSource ? JSON.parse(params.imageSource as string) : require('../assets/restaurants/Green Chef Kitchen.png'),
-        tags: params.tags ? JSON.parse(params.tags as string) : ['Vegan Friendly', 'Organic Focused', 'Plant-Based'],
-        distance: params.distance as string || '2.0 km',
-        deliveryTime: params.deliveryTime as string || '25-35 min',
-        description: 'Fresh, organic meals prepared with love and care for your health'
-      };
-      setRestaurant(restaurantData);
-    } catch (err) {
-      console.error('Error parsing restaurant data:', err);
-      setError('Failed to load restaurant information');
-    }
-  }, [params]);
+    fetchRestaurantData();
+  }, [id]);
 
-  const handleOrder = (meal: Meal) => {
-    if (!isLoggedIn) {
-      router.push('/(auth)/customer-login');
-      return;
-    }
-    
-    addToCart({
-      id: meal.id,
-      name: meal.name,
-      price: meal.price,
-      image: meal.image,
-      restaurant: restaurant?.name || 'Restaurant'
-    });
-    
-    setToastVisible(true);
-    setToastMessage(`${meal.name} added to cart!`);
-    setToastType('cart');
-  };
-
-  const handleAddToPlan = async (meal: Meal) => {
-    if (!isLoggedIn) {
-      router.push('/(auth)/customer-login');
-      return;
-    }
-    
+  const fetchRestaurantData = async () => {
     try {
-      const result = await MealPlanService.addMealToPlan({
-        id: meal.id,
-        name: meal.name,
-        description: meal.description,
-        image: meal.image,
-        tags: meal.tags,
-        calories: meal.calories,
-        price: meal.price,
-        restaurant: restaurant?.name
-      });
+      setLoading(true);
+      setError('');
       
-      if (result.success) {
-        setToastVisible(true);
-        setToastMessage(result.message);
-        setToastType('success');
+      console.log('🏪 Setting up restaurant data from params and fetching meals...');
+      
+      // Use passed restaurant data
+      const restaurantData = {
+        id: id as string,
+        name: name as string || 'Restaurant',
+        rating: parseFloat(rating as string) || 4.5,
+        reviewCount: parseInt(reviewCount as string) || 100,
+        image: imageSource ? JSON.parse(imageSource as string) : require('../assets/restaurant-logo.png'),
+        coverImage: imageSource ? JSON.parse(imageSource as string) : require('../assets/restaurant-logo.png'),
+        tags: tags ? JSON.parse(tags as string) : ['Restaurant'],
+        distance: distance as string || '2.0 km',
+        deliveryTime: deliveryTime as string || '25 - 35 min',
+        address: `${distance || '2.0 km'} away • ${deliveryTime || '25-35 min'} delivery`
+      };
+      
+      setRestaurant(restaurantData);
+      
+      // Fetch meals for this restaurant from hybrid service
+      const mealsResponse = await getHybridMealsByRestaurant(id as string);
+      
+      if (mealsResponse.success && mealsResponse.data) {
+        // Convert meals to display format
+        const displayMeals = mealsResponse.data.slice(0, 6).map((meal: any) => ({
+          id: meal.id,
+          name: meal.name,
+          description: meal.description,
+          image: meal.image || require('../assets/recommendation1.png'),
+          price: parseFloat(meal.price) || 3000,
+          calories: meal.nutritionalInfo?.calories || 400,
+          tags: meal.dietaryTags || []
+        }));
+        setMeals(displayMeals);
       } else {
-        setToastVisible(true);
-        setToastMessage(result.message);
-        setToastType('error');
+        // Fallback meals if none found for restaurant
+        setMeals([
+          {
+            id: 'fallback-1',
+            name: 'Signature Dish',
+            description: 'Our chef\'s special recommendation',
+            image: require('../assets/recommendation1.png'),
+            price: 3500,
+            calories: 450,
+            tags: ['Popular', 'Chef Special']
+          },
+          {
+            id: 'fallback-2',
+            name: 'Healthy Bowl',
+            description: 'Nutritious and delicious meal bowl',
+            image: require('../assets/recommendation2.png'),
+            price: 2800,
+            calories: 380,
+            tags: ['Healthy', 'Fresh']
+          }
+        ]);
       }
-    } catch (error) {
-      console.error('Error adding meal to plan:', error);
-      setToastVisible(true);
-      setToastMessage('Failed to add meal to plan. Please try again.');
-      setToastType('error');
+      
+      console.log('✅ Restaurant profile data loaded!');
+    } catch (err: any) {
+      console.error('❌ Error setting up restaurant data:', err);
+      setError('Failed to load restaurant data');
+    } finally {
+      setLoading(false);
     }
   };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading restaurant...</Text>
+      </View>
+    );
+  }
+
+  if (error || !restaurant) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error || 'Restaurant not found'}</Text>
+        <Button
+          title="Go Back"
+          variant="primary"
+          onPress={() => router.back()}
+        />
+      </View>
+    );
+  }
 
   const handleViewMenu = () => {
-    router.push('/menu');
+    console.log('Navigate to full menu');
   };
 
   const handleStartOrder = () => {
-    router.push('/(customer-tabs)/order');
+    console.log('Start order');
+  };
+
+  const handleAddToPlan = (meal: any) => {
+    console.log('Add to plan:', meal.name);
+  };
+
+  const handleMealPress = (meal: any) => {
+    router.push(`/meal/${meal.id}?name=${encodeURIComponent(meal.name)}&description=${encodeURIComponent(meal.description)}&price=${meal.price}&calories=${meal.calories}&image=${encodeURIComponent(JSON.stringify(meal.image))}`);
   };
 
   const handleSeeAllReviews = () => {
     router.push(`/reviews?itemName=${encodeURIComponent(restaurant?.name || 'Restaurant')}`);
   };
 
-  if (error || !restaurant) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error || 'Restaurant not found'}</Text>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const handleSeeAllPopular = () => {
+    console.log('See all popular meals');
+  };
+
+  const truncateDescription = (description: string, maxWords: number = 8) => {
+    const words = description.split(' ');
+    if (words.length <= maxWords) return description;
+    return words.slice(0, maxWords).join(' ') + '...';
+  };
 
   return (
     <View style={styles.container}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
       
-      {/* Header Image */}
+      {/* Step 1: Image Background - 390x324 from status bar */}
       <View style={styles.imageContainer}>
-        <Image source={restaurant.image} style={styles.backgroundImage} />
+        <Image source={restaurant.coverImage} style={styles.backgroundImage} />
         
         {/* Back Button */}
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => router.back()}
+        >
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         
-        {/* Profile Text */}
-        <Text style={styles.profileText}>Profile</Text>
-        
-        {/* Edit Button */}
-        <TouchableOpacity style={styles.editButton}>
-          <Ionicons name="create-outline" size={24} color="#fff" />
-        </TouchableOpacity>
+        {/* Header Title */}
+        <Text style={styles.headerTitle}>Restaurant profile</Text>
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Restaurant Info Card */}
-        <View style={styles.infoCard}>
+        {/* Step 2: Nice Space/Margin before restaurant info */}
+        <View style={styles.contentSpacing} />
+        
+        {/* Step 3: Restaurant Information */}
+        <View style={styles.restaurantInfo}>
           <Text style={styles.restaurantName}>{restaurant.name}</Text>
+          <Text style={styles.restaurantAddress}>{restaurant.address}</Text>
           
           {/* Tags */}
           <View style={styles.tagsContainer}>
-            {restaurant.tags.map((tag, index) => (
+            {restaurant.tags.map((tag: string, index: number) => (
               <View key={index} style={styles.tag}>
                 <Text style={styles.tagText}>{tag}</Text>
               </View>
             ))}
           </View>
           
-          {/* Stats Row */}
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Ionicons name="star" size={16} color="#FFD700" />
-              <Text style={styles.statText}>{restaurant.rating}</Text>
+          {/* Rating with See all */}
+          <View style={styles.ratingContainer}>
+            <View style={styles.starsContainer}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Ionicons
+                  key={star}
+                  name={star <= Math.floor(restaurant.rating) ? "star" : star <= restaurant.rating ? "star-half" : "star-outline"}
+                  size={20}
+                  color="#FFD700"
+                />
+              ))}
+              <Text style={styles.ratingText}>({restaurant.reviewCount})</Text>
             </View>
-            <View style={styles.statItem}>
-              <Ionicons name="people" size={16} color={colors.darkGray} />
-              <Text style={styles.statText}>{restaurant.reviewCount}</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Ionicons name="time" size={16} color={colors.darkGray} />
-              <Text style={styles.statText}>{restaurant.deliveryTime}</Text>
-            </View>
+            <TouchableOpacity onPress={handleSeeAllReviews}>
+              <Text style={styles.seeAllLink}>See all</Text>
+            </TouchableOpacity>
           </View>
           
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.actionButton} onPress={handleViewMenu}>
-              <Text style={styles.actionButtonText}>View Menu</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionButton, styles.secondaryButton]} onPress={handleSeeAllReviews}>
-              <Text style={[styles.actionButtonText, styles.secondaryButtonText]}>Reviews</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionButton, styles.secondaryButton]} onPress={handleStartOrder}>
-              <Text style={[styles.actionButtonText, styles.secondaryButtonText]}>Start Order</Text>
-            </TouchableOpacity>
+            <Button
+              title="View Menu"
+              variant="primary"
+              onPress={handleViewMenu}
+              style={styles.actionButton}
+            />
+            <Button
+              title="Reviews"
+              variant="outline"
+              onPress={handleSeeAllReviews}
+              style={styles.actionButton}
+            />
+            <Button
+              title="Start Order"
+              variant="outline"
+              onPress={handleStartOrder}
+              style={styles.actionButton}
+            />
           </View>
         </View>
         
-        {/* Your Menu Section */}
-        <View style={styles.menuSection}>
+        {/* Step 4: Most Popular Section - Simple Clean Layout */}
+        <View style={styles.popularSection}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Your Menu</Text>
-            <TouchableOpacity onPress={handleViewMenu}>
-              <Text style={styles.seeAllText}>See all</Text>
+            <Text style={styles.sectionTitle}>Most Popular</Text>
+            <TouchableOpacity onPress={handleSeeAllPopular}>
+              <Text style={styles.seeAllLink}>See all</Text>
             </TouchableOpacity>
           </View>
           
-          {/* Menu Items Grid */}
-          <View style={styles.menuGrid}>
-            {menuItems.map((meal) => (
-              <View key={meal.id} style={styles.menuCard}>
-                <Image source={meal.image} style={styles.menuItemImage} />
-                <Text style={styles.menuItemName}>{meal.name}</Text>
-                <Text style={styles.menuItemPrice}>{meal.price.toLocaleString()}</Text>
+          {/* Simple grid of meals */}
+          <View style={styles.mealsGrid}>
+            {meals.map((meal) => (
+              <TouchableOpacity 
+                key={meal.id} 
+                style={styles.mealCard}
+                onPress={() => handleMealPress(meal)}
+                activeOpacity={0.8}
+              >
+                <Image source={meal.image} style={styles.mealImage} />
+                <Text style={styles.mealName}>{meal.name}</Text>
+                <Text style={styles.mealDescription}>{truncateDescription(meal.description)}</Text>
                 <TouchableOpacity 
-                  style={styles.addButton}
-                  onPress={() => handleAddToPlan(meal)}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleAddToPlan(meal);
+                  }}
+                  style={styles.addToPlanButtonContainer}
                 >
-                  <Ionicons name="add" size={16} color="white" />
+                  <Button
+                    title="Add to Plan"
+                    variant="primary"
+                    style={styles.addToPlanButton}
+                  />
                 </TouchableOpacity>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         </View>
         
-        {/* Reviews Section */}
-        <View style={styles.reviewsSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Reviews</Text>
-            <TouchableOpacity onPress={handleSeeAllReviews}>
-              <Text style={styles.seeAllText}>See all</Text>
-            </TouchableOpacity>
-          </View>
-          
-          {/* Sample Reviews */}
-          <View style={styles.reviewCard}>
-            <Text style={styles.reviewerName}>Vivian Eze</Text>
-            <View style={styles.reviewStars}>
-              {[1,2,3,4,5].map((star) => (
-                <Ionicons key={star} name="star" size={14} color="#FFD700" />
-              ))}
-            </View>
-            <Text style={styles.reviewText}>Great food and fast delivery! The oats were delicious and fresh. Highly recommend!</Text>
-          </View>
-          
-          <View style={styles.reviewCard}>
-            <Text style={styles.reviewerName}>Victor Adewale</Text>
-            <View style={styles.reviewStars}>
-              {[1,2,3,4,5].map((star) => (
-                <Ionicons key={star} name="star" size={14} color="#FFD700" />
-              ))}
-            </View>
-            <Text style={styles.reviewText}>Amazing healthy options! Perfect for my diet plan. Will definitely order again.</Text>
-          </View>
-        </View>
+        {/* Bottom spacing */}
+        <View style={styles.bottomSpacing} />
       </ScrollView>
-      
-      {/* Toast Component */}
-      <MealPlanToast
-        visible={toastVisible}
-        message={toastMessage}
-        type={toastType}
-        onHide={() => setToastVisible(false)}
-        actionText={toastType === 'cart' ? 'View Cart' : undefined}
-        onActionPress={toastType === 'cart' ? () => router.push('/(customer-tabs)/order') : undefined}
-      />
     </View>
   );
 }
@@ -317,8 +273,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f7f5f0',
   },
+  
+  // Step 1: Image Background - 390x324
   imageContainer: {
-    height: 250,
+    width: screenWidth,
+    height: 324,
     position: 'relative',
   },
   backgroundImage: {
@@ -330,104 +289,100 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 50,
     left: 20,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    width: 40,
+    height: 40,
     borderRadius: 20,
-    padding: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  profileText: {
+  headerTitle: {
     position: 'absolute',
-    top: 58,
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    color: 'white',
+    top: 55,
+    left: 80,
     fontSize: 18,
     fontWeight: '600',
+    color: '#fff',
   },
-  editButton: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 20,
-    padding: 8,
-  },
+  
   scrollView: {
     flex: 1,
-    marginTop: -20,
   },
-  infoCard: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    marginBottom: 20,
+  
+  // Step 2: Nice spacing before content
+  contentSpacing: {
+    height: 24,
+  },
+  
+  // Step 3: Restaurant Information
+  restaurantInfo: {
+    paddingHorizontal: 20,
+    marginBottom: 32,
   },
   restaurantName: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.black,
-    marginBottom: 12,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 4,
+  },
+  restaurantAddress: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 16,
   },
   tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
     marginBottom: 16,
+    gap: 8,
   },
   tag: {
-    backgroundColor: colors.primary,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderRadius: 16,
     paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 6,
   },
   tagText: {
-    color: 'white',
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
+    color: colors.primary,
   },
-  statsRow: {
+  ratingContainer: {
     flexDirection: 'row',
-    gap: 20,
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 20,
   },
-  statItem: {
+  starsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
   },
-  statText: {
+  ratingText: {
     fontSize: 14,
-    color: colors.darkGray,
+    color: '#6b7280',
+    marginLeft: 4,
+  },
+  seeAllLink: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '600',
   },
   actionButtons: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   actionButton: {
     flex: 1,
-    backgroundColor: colors.primary,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
+    minWidth: 100,
   },
-  secondaryButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  actionButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  secondaryButtonText: {
-    color: colors.primary,
-  },
-  menuSection: {
-    backgroundColor: 'white',
-    padding: 20,
-    marginBottom: 20,
+  
+  // Step 4: Most Popular - Simple Clean Layout
+  popularSection: {
+    paddingHorizontal: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -436,96 +391,83 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.black,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a1a1a',
   },
-  seeAllText: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  menuGrid: {
+  mealsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
     gap: 12,
   },
-  menuCard: {
-    width: (SCREEN_WIDTH - 64) / 3,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 8,
+  mealCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  mealImage: {
+    width: '100%',
+    height: 120,
+    resizeMode: 'cover',
+  },
+  mealName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginTop: 12,
+    marginHorizontal: 12,
+    marginBottom: 4,
+  },
+  mealDescription: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginHorizontal: 12,
+    marginBottom: 12,
+    lineHeight: 16,
+  },
+  addToPlanButton: {
+    marginHorizontal: 12,
+    marginBottom: 12,
+    paddingVertical: 8,
+  },
+  addToPlanButtonContainer: {
+    marginHorizontal: 12,
+    marginBottom: 12,
+  },
+  
+  bottomSpacing: {
+    height: 40,
+  },
+  
+  // Loading and Error states
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
+    backgroundColor: '#f7f5f0',
   },
-  menuItemImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  menuItemName: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.black,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  menuItemPrice: {
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  addButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    padding: 4,
-  },
-  reviewsSection: {
-    backgroundColor: 'white',
-    padding: 20,
-    marginBottom: 20,
-  },
-  reviewCard: {
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  reviewerName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.black,
-    marginBottom: 4,
-  },
-  reviewStars: {
-    flexDirection: 'row',
-    gap: 2,
-    marginBottom: 8,
-  },
-  reviewText: {
-    fontSize: 13,
-    color: colors.darkGray,
-    lineHeight: 18,
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f7f5f0',
     padding: 20,
   },
   errorText: {
     fontSize: 16,
-    color: colors.darkGray,
+    color: '#ef4444',
     textAlign: 'center',
     marginBottom: 20,
-  },
-  backButtonText: {
-    color: colors.primary,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet, ScrollView } from 'react-native';
 import { Button } from '../../components/Button';
 import { colors } from '../../theme/colors';
@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { TextInput } from '../../components/TextInput';
 import { useRouter } from 'expo-router';
 import { useCart } from '../../cart-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function CartScreen() {
   const { items: cartItems, removeFromCart, updateQuantity, getTotalPrice } = useCart();
@@ -15,6 +16,8 @@ export default function CartScreen() {
   const [delivery, setDelivery] = useState(true);
 
   const router = useRouter();
+
+
 
   // Quantity adjustment handlers
   function changeQuantity(id: string, delta: number) {

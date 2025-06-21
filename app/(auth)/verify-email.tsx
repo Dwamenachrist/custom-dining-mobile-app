@@ -5,6 +5,7 @@ import { Button } from '../../components/Button';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import AuthService from '../../services/authService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function VerifyEmailScreen() {
     const router = useRouter();
@@ -47,14 +48,44 @@ export default function VerifyEmailScreen() {
         }
     };
 
-    const handleBackToLogin = () => {
-        router.replace('/(auth)/customer-login');
+    const handleBackToLogin = async () => {
+        // Determine user type and route to appropriate login screen
+        try {
+            const userType = await AsyncStorage.getItem('userType');
+            if (userType === 'restaurant') {
+                router.replace('/(auth)/restaurant-login');
+            } else {
+                router.replace('/(auth)/customer-login');
+            }
+        } catch (error) {
+            console.error('Error getting user type:', error);
+            // Default to customer login
+            router.replace('/(auth)/customer-login');
+        }
     };
 
-    const handleResendEmail = () => {
-        // TODO: Implement resend verification email functionality
-        console.log('📧 Resend verification email');
-        router.replace('/(auth)/customer-login');
+    const handleResendEmail = async () => {
+        try {
+            console.log('📧 Resending verification email...');
+            setIsLoading(true);
+            
+            const response = await AuthService.resendVerificationEmail();
+            
+            if (response.success) {
+                console.log('✅ Verification email sent successfully');
+                // Show success and redirect to appropriate login screen
+                alert('Verification email sent! Please check your inbox.');
+                await handleBackToLogin();
+            } else {
+                console.log('❌ Failed to resend verification email');
+                alert(response.message || 'Failed to resend verification email. Please try again.');
+            }
+        } catch (error) {
+            console.error('❌ Resend email error:', error);
+            alert('An error occurred while sending the email. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     if (isLoading) {

@@ -7,6 +7,7 @@ import Category from '../../components/Categories';
 import RestaurantCard from '../../components/RestaurantCards';
 import MealCard from '../../components/MealCards';
 import { EmailVerificationBanner } from '../../components/EmailVerificationBanner';
+
 import { useAuth } from '../../auth-context';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getUserMeals, DietaryPreferences, Meal as BackendMeal, Restaurant as BackendRestaurant } from '../../services/api';
@@ -81,6 +82,7 @@ export default function HomeScreen() {
   const [userImage, setUserImage] = useState<string | null>(null);
   const [dietaryPrefs, setDietaryPrefs] = useState<DietaryPreferences | null>(null);
   const [isPersonalized, setIsPersonalized] = useState(false);
+
 
   useEffect(() => {
     loadData();
@@ -329,11 +331,20 @@ export default function HomeScreen() {
       >
       <View style={styles.sectionHeader}>
         <View style={{ flex: 1 }}>
-        <Text style={styles.sectionTitle}>Recommended For You</Text>
+        <Text style={styles.sectionTitle}>
+          {dietaryPrefs ? '🎯 Recommended For You' : '🍽️ Popular Meals'}
+        </Text>
           {isPersonalized && dietaryPrefs && (
             <Text style={{ fontSize: 12, color: '#10b981', fontWeight: '500', marginTop: 2 }}>
               🎯 Personalized for {dietaryPrefs.healthGoal.replace('_', ' ')} • {dietaryPrefs.dietaryRestrictions.join(', ')}
             </Text>
+          )}
+          {!dietaryPrefs && (
+            <TouchableOpacity onPress={() => router.push('/meal-plan-builder')} style={{ marginTop: 2 }}>
+              <Text style={{ fontSize: 12, color: '#f59e0b', fontWeight: '500' }}>
+                ⚡ Complete profile for personalized recommendations
+              </Text>
+            </TouchableOpacity>
           )}
         </View>
         <TouchableOpacity onPress={() => router.push('/meal/recommended')}>
@@ -348,7 +359,16 @@ export default function HomeScreen() {
       />
 
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Top Restaurants</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.sectionTitle}>
+            {dietaryPrefs ? '🏆 Restaurants For You' : '🏆 Top Restaurants'}
+          </Text>
+          {!dietaryPrefs && (
+            <Text style={{ fontSize: 12, color: '#6b7280', fontStyle: 'italic', marginTop: 2 }}>
+              Popular choices • Complete profile for personalized options
+            </Text>
+          )}
+        </View>
         <TouchableOpacity onPress={() => router.push('/restaurants')}>
           <Text style={styles.seeAll}>See All</Text>
         </TouchableOpacity>

@@ -40,7 +40,7 @@ export default function MenuManagementScreen() {
       
       const response = await api.get(`/meals/restaurant/${restaurantId}`);
       
-      if (response.success && response.data && Array.isArray(response.data)) {
+      if (response.success && response.data) {
         const convertedItems = response.data.map((item: any) => ({
           id: item._id || item.id,
           name: item.name,

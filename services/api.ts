@@ -23,6 +23,9 @@ export interface User {
   email: string;
   role: string;         // Backend requires role
   isAdmin?: boolean;    // Backend has isAdmin field
+  isEmailVerified?: boolean; // Email verification status
+  hasProfile?: boolean; // Whether user has completed dietary preferences setup
+  forcePasswordChange?: boolean; // Whether user must change password
   createdAt?: string;
 }
 
@@ -63,6 +66,14 @@ export interface SignupRequest {
   role: string;         // Required by backend
 }
 
+// Restaurant registration request
+export interface RestaurantRegistrationRequest {
+  username: string;     // Business name
+  email: string;
+  password: string;
+  role: 'restaurant';   // Fixed role for restaurants
+}
+
 // Our frontend form data (before transformation)
 export interface SignupFormData {
   firstName: string;
@@ -82,14 +93,23 @@ export interface LoginRequest {
   role?: string;
 }
 
-// Backend registration response (based on docs)
+// Backend registration response (based on API docs)
 export interface RegistrationResponse {
-  status: string;
-  message: string;
-  // Note: Registration doesn't seem to return token immediately
+  status: string; // "success" or "error"
+  message: string; // "Registration successful! Please check your email to verify your account."
 }
 
-// Login response (assumed - we'll need to check login endpoint)
+// Login response (updated based on new backend format)
+export interface LoginResponse {
+  status: string;              // "success" or "error"
+  token: string;               // JWT token
+  forcePasswordChange: boolean; // Whether user must change password
+  hasUserProfile: boolean;     // Whether user has completed dietary preferences setup
+  isEmailVerified: boolean;    // Whether user has verified their email
+  message?: string;            // Optional response message
+}
+
+// Auth data that we store locally (enhanced with user info)
 export interface AuthResponse {
   user: User;
   token: string;
@@ -215,23 +235,43 @@ class ApiService {
     }
   }
 
-  // POST request - for creating/sending data
+  // POST request - for creating/sending data (with 503 retry logic)
   static async post<T>(endpoint: string, data: any): Promise<ApiResponse<T>> {
-    try {
-      const response = await apiClient.post(endpoint, data);
-      
-      // Handle backend response format: { status: "success", token: "...", message: "..." }
-      const isSuccess = response.data.status === 'success';
-      
-      return {
-        success: isSuccess,
-        message: response.data.message || (isSuccess ? 'Success' : 'Request failed'),
-        data: response.data, // Return the full response data
-        status: response.data.status,
-      };
-    } catch (error) {
-      return this.handleError(error);
+    const maxRetries = 3;
+    const retryDelay = 3000; // 3 seconds
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          console.log(`🔄 Retry attempt ${attempt}/${maxRetries} for cold start`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+        
+        const response = await apiClient.post(endpoint, data);
+        
+        // Handle backend response format: { status: "success", token: "...", message: "..." }
+        const isSuccess = response.data.status === 'success';
+        
+        return {
+          success: isSuccess,
+          message: response.data.message || (isSuccess ? 'Success' : 'Request failed'),
+          data: response.data, // Return the full response data
+          status: response.data.status,
+        };
+      } catch (error: any) {
+        // Check if it's a 503 error (cold start) and we can retry
+        if (error.response?.status === 503 && attempt < maxRetries) {
+          console.log(`🌡️ Server cold start detected (503) - attempt ${attempt + 1}/${maxRetries + 1}`);
+          continue;
+        }
+        
+        // Not a retryable error or max retries reached
+        return this.handleError(error);
+      }
     }
+    
+    // This should never be reached
+    return this.handleError(new Error('Max retries exceeded'));
   }
 
   // PUT request - for updating data
@@ -549,11 +589,46 @@ export async function deleteUserProfile(): Promise<ApiResponse<any>> {
  * This converts frontend form data to backend API format
  */
 export function transformMealPlanToDietaryPreferences(mealPlanData: MealPlanData): DietaryPreferences {
-  // Map meal plan data to dietary preferences format
+  // Map meal plan goals to health goals (exact format expected by backend)
+  const healthGoalMapping: { [key: string]: string } = {
+    'Balanced nutrition': 'balanced_nutrition',
+    'Manage diabetes': 'manage_diabetes', 
+    'Weight loss': 'weight_loss',
+    'Plant-based': 'plant_based',
+  };
+
+  // Map restrictions to lowercase for backend consistency
+  const dietaryRestrictions = mealPlanData.restrictions.map(restriction => 
+    restriction.toLowerCase().replace(' ', '-')
+  );
+
+  // Generate preferred meal tags based on selections
+  const preferredMealTags: string[] = [];
+  
+  // Add tags based on health goal
+  if (mealPlanData.mealGoal === 'Weight loss') {
+    preferredMealTags.push('low-calorie', 'high-protein');
+  } else if (mealPlanData.mealGoal === 'Manage diabetes') {
+    preferredMealTags.push('low-carb', 'sugar-free');
+  } else if (mealPlanData.mealGoal === 'Plant-based') {
+    preferredMealTags.push('vegan', 'plant-based');
+  }
+  
+  // Add tags based on restrictions
+  if (mealPlanData.restrictions.includes('Low-carb')) {
+    preferredMealTags.push('low-carb');
+  }
+  if (mealPlanData.restrictions.includes('Vegetarian')) {
+    preferredMealTags.push('vegetarian');
+  }
+  if (mealPlanData.restrictions.includes('Vegan')) {
+    preferredMealTags.push('vegan');
+  }
+
   return {
-    healthGoal: mealPlanData.mealGoal.toLowerCase().replace(' ', '_'), // e.g., "Weight Loss" -> "weight_loss"
-    dietaryRestrictions: mealPlanData.restrictions, // Already in array format
-    preferredMealTags: [] // You might want to extract this from meal types or other data
+    healthGoal: healthGoalMapping[mealPlanData.mealGoal] || 'balanced_nutrition',
+    dietaryRestrictions: dietaryRestrictions,
+    preferredMealTags: [...new Set(preferredMealTags)] // Remove duplicates
   };
 }
 
@@ -623,4 +698,11 @@ export async function removeMealFromFavorites(mealId: string): Promise<ApiRespon
     };
   }
 }
+
+// Retry configuration for cold starts
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  retryDelay: 2000, // 2 seconds
+  retryOn503: true,
+};
 
