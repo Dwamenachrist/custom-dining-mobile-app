@@ -402,6 +402,80 @@ class AuthService {
     }
   }
 
+  // 📝 Change Password with Temporary Password (for non-authenticated users from forgot password flow)
+  async changePasswordWithTempPassword(email: string, tempPassword: string, newPassword: string, confirmPassword: string): Promise<ApiResponse<{ message: string }>> {
+    try {
+      console.log('🔑 Attempting to login with temporary password first, then change password');
+      
+      // Validate passwords match
+      if (newPassword !== confirmPassword) {
+        return {
+          success: false,
+          message: 'New password and confirm password do not match',
+          error: 'Password mismatch'
+        };
+      }
+      
+      // Step 1: Login with temporary password to get authentication
+      console.log('🔐 Step 1: Logging in with temporary password');
+      const loginResponse = await this.login({ email, password: tempPassword });
+      
+      if (!loginResponse.success) {
+        console.log('❌ Failed to login with temporary password:', loginResponse.message);
+        return {
+          success: false,
+          message: 'Temporary password is incorrect or expired. Please request a new password reset.',
+          error: loginResponse.error
+        };
+      }
+      
+      console.log('✅ Step 1 complete: Successfully logged in with temporary password');
+      
+      // Step 2: Now change the password using the authenticated session
+      console.log('🔑 Step 2: Changing password with authenticated session');
+      const changeResponse = await this.changePassword(tempPassword, newPassword, confirmPassword);
+      
+      if (changeResponse.success) {
+        console.log('✅ Password changed successfully after temp password login');
+        
+        // Step 3: Logout to clear the temporary session
+        console.log('👋 Step 3: Logging out temporary session');
+        await this.logout();
+        
+        return {
+          success: true,
+          message: 'Password updated successfully. You can now log in with your new password.',
+          data: changeResponse.data
+        };
+      } else {
+        console.log('❌ Failed to change password:', changeResponse.message);
+        // Still logout the temporary session
+        await this.logout();
+        
+        return {
+          success: false,
+          message: changeResponse.message || 'Failed to update password',
+          error: changeResponse.error
+        };
+      }
+      
+    } catch (error) {
+      console.error('❌ Change password with temp password error:', error);
+      // Try to logout in case we're in a partial state
+      try {
+        await this.logout();
+      } catch (logoutError) {
+        console.error('❌ Failed to logout after error:', logoutError);
+      }
+      
+      return {
+        success: false,
+        message: 'Failed to change password. Please try again or request a new temporary password.',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
   // 📝 Change Password (for authenticated users with Bearer token)
   async changePassword(currentPassword: string, newPassword: string, confirmPassword: string): Promise<ApiResponse<{ message: string }>> {
     try {
@@ -467,20 +541,20 @@ class AuthService {
         `${ENDPOINTS.verifyEmail}?token=${token}`
       );
       
-      // Check the backend status field
-      const isSuccess = response.data.status === 'success';
+        // Check the backend status field
+        const isSuccess = response.data.status === 'success';
       
-      if (isSuccess) {
-        console.log('✅ Email verified successfully');
-      } else {
-        console.log('❌ Email verification failed:', response.data.message);
-      }
-      
-      return {
-        success: isSuccess,
-        message: response.data.message || (isSuccess ? 'Email verified successfully' : 'Failed to verify email'),
-        data: response.data
-      };
+        if (isSuccess) {
+          console.log('✅ Email verified successfully');
+        } else {
+          console.log('❌ Email verification failed:', response.data.message);
+        }
+        
+        return {
+          success: isSuccess,
+          message: response.data.message || (isSuccess ? 'Email verified successfully' : 'Failed to verify email'),
+          data: response.data
+        };
     } catch (error) {
       console.error('❌ Verify email error:', error);
       return {

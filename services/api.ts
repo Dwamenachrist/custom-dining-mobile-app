@@ -26,6 +26,7 @@ export interface User {
   isEmailVerified?: boolean; // Email verification status
   hasProfile?: boolean; // Whether user has completed dietary preferences setup
   forcePasswordChange?: boolean; // Whether user must change password
+  restaurantId?: string; // For restaurant users
   createdAt?: string;
 }
 
@@ -529,16 +530,37 @@ export async function saveDietaryPreferences(preferences: DietaryPreferences): P
   try {
     console.log('🥗 Saving dietary preferences:', preferences);
     
+    // Validate required fields
+    if (!preferences.healthGoal || !preferences.dietaryRestrictions || !preferences.preferredMealTags) {
+      throw new Error('Missing required dietary preference fields');
+    }
+    
+    console.log('📤 Sending to backend:', {
+      endpoint: '/user/profile',
+      method: 'POST',
+      data: preferences
+    });
+    
     const response = await api.post('/user/profile', preferences);
     
     if (response.success) {
       console.log('✅ Dietary preferences saved successfully!');
+      console.log('📋 Response:', response);
+    } else {
+      console.warn('⚠️ Backend returned unsuccessful response:', response);
     }
     
     return response;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Save dietary preferences error:', error);
-    throw error;
+    
+    // Return a proper error response
+    return {
+      success: false,
+      message: error.message || 'Failed to save dietary preferences',
+      error: error.message || 'Unknown error',
+      status: 'error'
+    };
   }
 }
 
@@ -552,14 +574,22 @@ export async function getUserMeals(): Promise<ApiResponse<Meal[]>> {
     
     const response = await api.get<Meal[]>('/user/meals');
     
-    if (response.success) {
-      console.log('✅ User meals fetched successfully!');
+    if (response.success && response.data) {
+      console.log(`✅ User meals fetched successfully! Found ${response.data.length} meals`);
+    } else {
+      console.warn('⚠️ No meals found or unsuccessful response:', response);
     }
     
     return response;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Get user meals error:', error);
-    throw error;
+    
+    return {
+      success: false,
+      message: error.message || 'Failed to fetch personalized meals',
+      error: error.message || 'Unknown error',
+      status: 'error'
+    };
   }
 }
 
@@ -575,12 +605,57 @@ export async function deleteUserProfile(): Promise<ApiResponse<any>> {
     
     if (response.success) {
       console.log('✅ User profile deleted successfully!');
+      
+      // Clear local storage data related to profile
+      await AsyncStorage.multiRemove([
+        'hasUserProfile',
+        'mealPlan',
+        'dietaryPreferences'
+      ]);
+      console.log('🧹 Local profile data cleared');
+    } else {
+      console.warn('⚠️ Profile deletion unsuccessful:', response);
     }
     
     return response;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Delete user profile error:', error);
-    throw error;
+    
+    return {
+      success: false,
+      message: error.message || 'Failed to delete user profile',
+      error: error.message || 'Unknown error',
+      status: 'error'
+    };
+  }
+}
+
+/**
+ * Get user's current profile/dietary preferences
+ * GET /api/user/profile (if this endpoint exists)
+ */
+export async function getUserProfile(): Promise<ApiResponse<DietaryPreferences>> {
+  try {
+    console.log('👤 Fetching user profile');
+    
+    const response = await api.get<DietaryPreferences>('/user/profile');
+    
+    if (response.success && response.data) {
+      console.log('✅ User profile fetched successfully!');
+    } else {
+      console.warn('⚠️ No profile found or unsuccessful response:', response);
+    }
+    
+    return response;
+  } catch (error: any) {
+    console.error('❌ Get user profile error:', error);
+    
+    return {
+      success: false,
+      message: error.message || 'Failed to fetch user profile',
+      error: error.message || 'Unknown error',
+      status: 'error'
+    };
   }
 }
 
@@ -705,4 +780,69 @@ const RETRY_CONFIG = {
   retryDelay: 2000, // 2 seconds
   retryOn503: true,
 };
+
+/**
+ * Test all dietary preferences endpoints
+ * This function tests the complete flow of dietary preference operations
+ */
+export async function testDietaryPreferencesFlow(): Promise<{
+  saveTest: { success: boolean; message: string };
+  getUserMealsTest: { success: boolean; message: string };
+  getUserProfileTest: { success: boolean; message: string };
+  overallStatus: string;
+}> {
+  console.log('🧪 Testing dietary preferences flow...');
+  
+  const results = {
+    saveTest: { success: false, message: '' },
+    getUserMealsTest: { success: false, message: '' },
+    getUserProfileTest: { success: false, message: '' },
+    overallStatus: ''
+  };
+  
+  // Test data
+  const testPreferences: DietaryPreferences = {
+    healthGoal: 'weight_loss',
+    dietaryRestrictions: ['vegetarian', 'gluten-free'],
+    preferredMealTags: ['high-protein', 'low-carb']
+  };
+  
+  try {
+    // Test 1: Save dietary preferences
+    console.log('🧪 Test 1: Save dietary preferences');
+    const saveResponse = await saveDietaryPreferences(testPreferences);
+    results.saveTest = {
+      success: saveResponse.success,
+      message: saveResponse.message || (saveResponse.success ? 'Save successful' : 'Save failed')
+    };
+    
+    // Test 2: Get user profile
+    console.log('🧪 Test 2: Get user profile');
+    const profileResponse = await getUserProfile();
+    results.getUserProfileTest = {
+      success: profileResponse.success,
+      message: profileResponse.message || (profileResponse.success ? 'Profile fetch successful' : 'Profile fetch failed')
+    };
+    
+    // Test 3: Get personalized meals
+    console.log('🧪 Test 3: Get personalized meals');
+    const mealsResponse = await getUserMeals();
+    results.getUserMealsTest = {
+      success: mealsResponse.success,
+      message: mealsResponse.message || (mealsResponse.success ? `Found ${mealsResponse.data?.length || 0} meals` : 'Meals fetch failed')
+    };
+    
+    // Overall status
+    const successCount = [results.saveTest.success, results.getUserProfileTest.success, results.getUserMealsTest.success].filter(Boolean).length;
+    results.overallStatus = `${successCount}/3 tests passed`;
+    
+    console.log('🧪 Test results:', results);
+    return results;
+    
+  } catch (error: any) {
+    console.error('🧪 Test flow error:', error);
+    results.overallStatus = 'Test flow failed';
+    return results;
+  }
+}
 

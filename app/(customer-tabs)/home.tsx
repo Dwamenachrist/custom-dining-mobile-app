@@ -1,6 +1,6 @@
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, ScrollView, Text, StyleSheet, TouchableOpacity, StatusBar, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import GreetingHeader from '../../components/Greeting';
 import Category from '../../components/Categories';
@@ -332,17 +332,17 @@ export default function HomeScreen() {
       <View style={styles.sectionHeader}>
         <View style={{ flex: 1 }}>
         <Text style={styles.sectionTitle}>
-          {dietaryPrefs ? '🎯 Recommended For You' : '🍽️ Popular Meals'}
+          {dietaryPrefs ? 'Recommended For You' : '🍽️ Popular Meals'}
         </Text>
           {isPersonalized && dietaryPrefs && (
             <Text style={{ fontSize: 12, color: '#10b981', fontWeight: '500', marginTop: 2 }}>
-              🎯 Personalized for {dietaryPrefs.healthGoal.replace('_', ' ')} • {dietaryPrefs.dietaryRestrictions.join(', ')}
+              Personalized for {dietaryPrefs.healthGoal.replace('_', ' ')} • {dietaryPrefs.dietaryRestrictions.join(', ')}
             </Text>
           )}
           {!dietaryPrefs && (
             <TouchableOpacity onPress={() => router.push('/meal-plan-builder')} style={{ marginTop: 2 }}>
               <Text style={{ fontSize: 12, color: '#f59e0b', fontWeight: '500' }}>
-                ⚡ Complete profile for personalized recommendations
+                Complete profile for personalized recommendations
               </Text>
             </TouchableOpacity>
           )}
@@ -361,7 +361,7 @@ export default function HomeScreen() {
       <View style={styles.sectionHeader}>
         <View style={{ flex: 1 }}>
           <Text style={styles.sectionTitle}>
-            {dietaryPrefs ? '🏆 Restaurants For You' : '🏆 Top Restaurants'}
+            {dietaryPrefs ? 'Restaurants For You' : 'Top Restaurants'}
           </Text>
           {!dietaryPrefs && (
             <Text style={{ fontSize: 12, color: '#6b7280', fontStyle: 'italic', marginTop: 2 }}>
@@ -384,7 +384,7 @@ export default function HomeScreen() {
           <Text style={styles.sectionTitle}>Tip Of The Day</Text>
           <View style={styles.tipCard}>
             <Text style={styles.tipText}>
-              💡 Drinking water 30 minutes before meals can help with digestion and portion control.
+              💡Drinking water 30 minutes before meals can help with digestion and portion control.
             </Text>
           </View>
         </View>

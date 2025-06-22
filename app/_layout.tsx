@@ -24,6 +24,7 @@ function RootLayoutNav() {
   const segments = useSegments();
   const [showCustomSplash, setShowCustomSplash] = useState(true);
   const [appReady, setAppReady] = useState(false);
+  const [navigationReady, setNavigationReady] = useState(false);
   
   const [loaded] = useFonts({
     PoppinsRegular: require('../assets/fonts/Poppins-Regular.ttf'),
@@ -32,6 +33,15 @@ function RootLayoutNav() {
     Medium: require('../assets/fonts/Poppins-Medium.ttf'),
     Italic: require('../assets/fonts/Poppins-Italic.ttf')
   });
+
+  // Set navigation ready after component mounts
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setNavigationReady(true);
+    }, 100); // Small delay to ensure Stack is rendered
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     // Prepare app resources
@@ -63,9 +73,9 @@ function RootLayoutNav() {
   }, []);
 
   useEffect(() => {
-    // Don't do anything while loading or showing splash
-    if (isLoading || !appReady || showCustomSplash) {
-      console.log('⏳ Still loading:', { isLoading, appReady, showCustomSplash });
+    // Don't do anything while loading, showing splash, or navigation not ready
+    if (isLoading || !appReady || showCustomSplash || !navigationReady) {
+      console.log('⏳ Still loading:', { isLoading, appReady, showCustomSplash, navigationReady });
       return;
     }
 
@@ -75,33 +85,39 @@ function RootLayoutNav() {
     // Define allowed screens for different states
     const publicScreens = ['(auth)', 'customer-terms', 'restaurant-terms'];
     const onboardingScreens = ['meal-plan-builder', 'change-password', 'upload-certifications'];
-    const authScreens = ['(customer-tabs)', '(restaurant-tabs)'];
 
     // If user is logged in but in auth screens, redirect appropriately
     if (isLoggedIn && currentSegment === '(auth)') {
       console.log('✅ Logged in user in auth - redirecting');
-      checkUserStateAndRedirect();
+      // Use setTimeout to ensure navigation happens after render
+      setTimeout(() => checkUserStateAndRedirect(), 50);
       return;
     }
 
     // If user is not logged in and trying to access protected screens
     if (!isLoggedIn && !publicScreens.includes(currentSegment) && !onboardingScreens.includes(currentSegment)) {
       console.log('❌ Not logged in - redirecting to auth');
-      router.replace('/(auth)/path');
+      setTimeout(() => router.replace('/(auth)/path'), 50);
       return;
     }
 
     // If we're at the root level and user is logged in, redirect appropriately
     if (isLoggedIn && (!currentSegment || currentSegment === 'custom-splash')) {
       console.log('🏠 At root with logged in user - redirecting');
-      checkUserStateAndRedirect();
+      setTimeout(() => checkUserStateAndRedirect(), 50);
       return;
     }
 
-  }, [isLoading, isLoggedIn, segments, appReady, showCustomSplash]);
+  }, [isLoading, isLoggedIn, segments, appReady, showCustomSplash, navigationReady]);
 
   const checkUserStateAndRedirect = async () => {
     try {
+      // Double-check navigation is ready
+      if (!navigationReady) {
+        console.log('⏳ Navigation not ready, skipping redirect');
+        return;
+      }
+
       const userType = await AsyncStorage.getItem('userType');
       const hasUserProfile = await AsyncStorage.getItem('hasUserProfile') === 'true';
       const forcePasswordChange = await AsyncStorage.getItem('forcePasswordChange') === 'true';
@@ -133,47 +149,65 @@ function RootLayoutNav() {
       }
     } catch (error) {
       console.error('❌ Redirect error:', error);
-      router.replace('/(auth)/path');
+      // Fallback with timeout to ensure navigation is safe
+      setTimeout(() => {
+        try {
+          router.replace('/(auth)/path');
+        } catch (navError) {
+          console.error('❌ Navigation fallback failed:', navError);
+        }
+      }, 100);
     }
   };
 
-  // Show custom splash screen while app is loading or if explicitly showing
-  if (!appReady || showCustomSplash) {
-    return <CustomSplashScreen />;
-  }
-
-  // Once loading is complete, the router will handle showing the correct stack.
+  // Always render the Stack, but show splash screen as overlay when needed
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="custom-splash" />
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(customer-tabs)" />
-      <Stack.Screen name="(restaurant-tabs)" />
-      <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="customer-notifications" />
-      <Stack.Screen name="restaurant-notifications" />
-      <Stack.Screen name="checkout" />
-      <Stack.Screen name="order-confirmation" />
-      <Stack.Screen name="order-status" />
-      <Stack.Screen name="edit-profile" />
-      <Stack.Screen name="upload-certifications" />
-      <Stack.Screen name="restaurants" />
-      <Stack.Screen name="restaurant-profile" />
-      <Stack.Screen name="customer-terms" />
-      <Stack.Screen name="restaurant-terms" />
-      <Stack.Screen name="meal/[id]" />
-      <Stack.Screen name="meal/recommended" />
-      <Stack.Screen name="add-meal" />
-      <Stack.Screen name="meal-plan-builder" />
-      <Stack.Screen name="change-password" />
-      <Stack.Screen name="location-search" />
-      <Stack.Screen name="breakfast" />
-      <Stack.Screen name="lunch" />
-      <Stack.Screen name="dinner" />
-      <Stack.Screen name="snacks" />
-      <Stack.Screen name="menu" />
-      <Stack.Screen name="reviews" />
-    </Stack>
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="custom-splash" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(customer-tabs)" />
+        <Stack.Screen name="(restaurant-tabs)" />
+        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="customer-notifications" />
+        <Stack.Screen name="restaurant-notifications" />
+        <Stack.Screen name="checkout" />
+        <Stack.Screen name="order-confirmation" />
+        <Stack.Screen name="order-status" />
+        <Stack.Screen name="edit-profile" />
+        <Stack.Screen name="upload-certifications" />
+        <Stack.Screen name="restaurants" />
+        <Stack.Screen name="restaurant-profile" />
+        <Stack.Screen name="customer-terms" />
+        <Stack.Screen name="restaurant-terms" />
+        <Stack.Screen name="meal/[id]" />
+        <Stack.Screen name="meal/recommended" />
+        <Stack.Screen name="add-meal" />
+        <Stack.Screen name="meal-plan-builder" />
+        <Stack.Screen name="change-password" />
+        <Stack.Screen name="location-search" />
+        <Stack.Screen name="breakfast" />
+        <Stack.Screen name="lunch" />
+        <Stack.Screen name="dinner" />
+        <Stack.Screen name="snacks" />
+        <Stack.Screen name="menu" />
+        <Stack.Screen name="reviews" />
+      </Stack>
+      
+      {/* Show splash screen as overlay when needed */}
+      {(!appReady || showCustomSplash) && (
+        <View style={{ 
+          position: 'absolute', 
+          top: 0, 
+          left: 0, 
+          right: 0, 
+          bottom: 0, 
+          zIndex: 1000 
+        }}>
+          <CustomSplashScreen />
+        </View>
+      )}
+    </>
   );
 }
 

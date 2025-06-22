@@ -10,6 +10,7 @@ interface User {
   role: string;
   restaurantId?: string;
   isEmailVerified?: boolean;
+  hasProfile?: boolean; // Whether user has completed dietary preferences setup
 }
 
 interface AuthContextType {
@@ -92,8 +93,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setJwt(null);
         setIsEmailVerified(false);
       } finally {
-        setIsLoading(false);
-        console.log('✅ Auth check completed');
+        // Small delay to ensure all state updates are complete
+        setTimeout(() => {
+          setIsLoading(false);
+          console.log('✅ Auth check completed');
+        }, 50);
       }
     };
 

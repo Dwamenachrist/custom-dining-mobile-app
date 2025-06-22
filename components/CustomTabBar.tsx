@@ -1,3 +1,4 @@
+import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { useRouter, useSegments } from 'expo-router';
 import { colors } from '../theme/colors';

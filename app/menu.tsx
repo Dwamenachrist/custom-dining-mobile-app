@@ -6,7 +6,7 @@ import { colors } from '../theme/colors';
 import { useAuth } from '../auth-context';
 import { useCart } from '../cart-context';
 import MealPlanService from '../services/mealPlanService';
-import MealPlanToast from '../components/MealPlanToast';
+import { CartToast } from '../components/CartToast';
 
 export default function MenuScreen() {
   const router = useRouter();
@@ -186,14 +186,13 @@ export default function MenuScreen() {
         </View>
       </ScrollView>
       
-      <MealPlanToast
-        visible={toastVisible}
-        message={toastMessage}
-        type={toastType}
-        onHide={() => setToastVisible(false)}
-        actionText={toastType === 'cart' ? 'View Cart' : undefined}
-        onActionPress={toastType === 'cart' ? () => router.push('/(customer-tabs)/order') : undefined}
-      />
+      {toastType === 'cart' && (
+        <CartToast
+          visible={toastVisible}
+          mealName={toastMessage.replace(' added to cart!', '')}
+          onClose={() => setToastVisible(false)}
+        />
+      )}
     </SafeAreaView>
   );
 }

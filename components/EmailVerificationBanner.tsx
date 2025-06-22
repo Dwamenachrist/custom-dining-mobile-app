@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../auth-context';
-import { colors } from '../theme/colors';
 
 interface EmailVerificationBannerProps {
   onResendEmail?: () => void;

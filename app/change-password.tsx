@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, SafeAreaView, StatusBar, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { useRouter, useSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Button } from '../components/Button';
 import { TextInput } from '../components/TextInput';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,11 +11,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ChangePasswordScreen() {
     const router = useRouter();
-    const searchParams = useSearchParams();
+    const searchParams = useLocalSearchParams();
     const { setIsLoggedIn, setUser, setJwt } = useAuth();
     
     // Get reset token from URL (for forgot password flow)
-    const resetToken = searchParams.get('token');
+    const resetToken = searchParams.token as string;
     
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -25,9 +25,12 @@ export default function ChangePasswordScreen() {
     const [isSuccess, setIsSuccess] = useState(false);
     const [isSessionExpired, setIsSessionExpired] = useState(false);
     const [userEmail, setUserEmail] = useState('');
+    const [showTempPasswordToast, setShowTempPasswordToast] = useState(false);
+    const [tempPasswordEmail, setTempPasswordEmail] = useState('');
+    const [isUserAuthenticated, setIsUserAuthenticated] = useState(false);
     
     // Determine if this is forgot password flow or authenticated user flow
-    const isForgotPasswordFlow = !!resetToken;
+    const isForgotPasswordFlow = searchParams.fromForgotPassword === 'true';
 
     // Validation helpers
     const trimmedNewPassword = newPassword.trim();
@@ -38,24 +41,42 @@ export default function ChangePasswordScreen() {
     useEffect(() => {
         console.log('🔑 Change Password Screen - Mode:', isForgotPasswordFlow ? 'Forgot Password Flow' : 'Authenticated User Flow');
         
-        if (isForgotPasswordFlow) {
-            console.log('✅ Reset token found:', resetToken?.substring(0, 10) + '...');
-            
-            // Get user email from forgot password flow (for display)
-            const getUserEmail = async () => {
-                try {
+        const initializeScreen = async () => {
+            try {
+                // Check if user is authenticated
+                const authenticated = await AuthService.isAuthenticated();
+                setIsUserAuthenticated(authenticated);
+                console.log('🔐 User authentication status:', authenticated);
+                
+                // Check if we should show the temporary password toast
+                const shouldShowToast = await AsyncStorage.getItem('show_temp_password_toast');
+                const storedEmail = await AsyncStorage.getItem('temp_password_email');
+                
+                if (shouldShowToast === 'true' && storedEmail) {
+                    console.log('🍞 Showing temporary password toast for:', storedEmail);
+                    setTempPasswordEmail(storedEmail);
+                    setShowTempPasswordToast(true);
+                    
+                    // Clear the flag so it doesn't show again
+                    await AsyncStorage.removeItem('show_temp_password_toast');
+                }
+                
+                if (isForgotPasswordFlow) {
+                    console.log('📧 Forgot password flow detected');
+                    
+                    // Get user email from forgot password flow (for display)
                     const email = await AsyncStorage.getItem('forgot_password_email');
                     if (email) {
                         setUserEmail(email);
                         console.log('📧 User email from forgot password:', email);
                     }
-                } catch (error) {
-                    console.error('❌ Failed to get user email:', error);
                 }
-            };
-            
-            getUserEmail();
-        }
+            } catch (error) {
+                console.error('❌ Failed to initialize screen:', error);
+            }
+        };
+        
+        initializeScreen();
     }, [resetToken, isForgotPasswordFlow]);
 
     const handleChangePassword = async () => {
@@ -91,27 +112,33 @@ export default function ChangePasswordScreen() {
 
             let response;
 
-            if (isForgotPasswordFlow) {
-                // FORGOT PASSWORD FLOW: Use reset token (no current password needed)
-                if (!resetToken) {
-                    setError('No reset token found. Please use the link from your email.');
+            if (isForgotPasswordFlow || !isUserAuthenticated) {
+                // FORGOT PASSWORD FLOW OR NON-AUTHENTICATED USER: Use temporary password
+                if (!trimmedCurrentPassword) {
+                    setError('Please enter the temporary password from your email.');
                     return;
                 }
 
-                console.log('🔑 Resetting password using token from forgot password flow');
-                response = await AuthService.resetPassword(resetToken, trimmedNewPassword);
+                if (!userEmail) {
+                    setError('Email not found. Please restart the forgot password process.');
+                    return;
+                }
+
+                console.log('🔑 Changing password using temporary password for non-authenticated user');
+                response = await AuthService.changePasswordWithTempPassword(userEmail, trimmedCurrentPassword, trimmedNewPassword, trimmedConfirmPassword);
 
                 if (response.success) {
-                    console.log('✅ Password reset successfully via token');
+                    console.log('✅ Password changed successfully using temporary password');
                     setIsSuccess(true);
                     // Clear forgot password data
-                    await AsyncStorage.multiRemove(['forgot_password_email']);
+                    await AsyncStorage.multiRemove(['forgot_password_email', 'temp_password_email']);
                 } else {
                     if (response.message?.toLowerCase().includes('invalid') || 
-                        response.message?.toLowerCase().includes('expired')) {
-                        setError('Reset link has expired or is invalid. Please request a new password reset.');
+                        response.message?.toLowerCase().includes('expired') ||
+                        response.message?.toLowerCase().includes('incorrect')) {
+                        setError('Temporary password is incorrect or expired. Please request a new password reset.');
                     } else {
-                        setError(response.message || 'Failed to reset password. Please try again.');
+                        setError(response.message || 'Failed to change password. Please try again.');
                     }
                 }
             } else {
@@ -217,6 +244,66 @@ export default function ChangePasswordScreen() {
         }
     };
 
+    // Temporary Password Toast Component
+    const TempPasswordToast = () => {
+        if (!showTempPasswordToast) return null;
+
+        return (
+            <View style={{
+                position: 'absolute',
+                top: 100,
+                left: 16,
+                right: 16,
+                zIndex: 9999,
+                elevation: 9999,
+            }}>
+                <View style={{
+                    backgroundColor: 'white',
+                    borderRadius: 12,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 8,
+                    borderWidth: 1,
+                    borderColor: '#e5e7eb'
+                }}>
+                    <View className="flex-row items-start p-4">
+                        {/* Email Icon */}
+                        <View className="w-10 h-10 bg-green-100 rounded-full items-center justify-center mr-3 mt-1">
+                            <Ionicons name="mail" size={20} color="#16a34a" />
+                        </View>
+
+                        {/* Message */}
+                        <View className="flex-1">
+                            <Text className="text-sm font-semibold text-gray-900 mb-1">
+                                Temporary Password Sent! 🔑
+                            </Text>
+                            <Text className="text-xs text-gray-600 leading-4 mb-2">
+                                Check your email for the temporary password sent to{' '}
+                                <Text className="font-medium text-gray-800">{tempPasswordEmail}</Text>
+                            </Text>
+                            <Text className="text-xs text-green-600 font-medium leading-4 mb-1">
+                                📧 Copy the temporary password and enter it below
+                            </Text>
+                            <Text className="text-xs text-gray-500 leading-4">
+                                Use it as your "Current Password" to set a new password.
+                            </Text>
+                        </View>
+
+                        {/* Close Button */}
+                        <TouchableOpacity 
+                            onPress={() => setShowTempPasswordToast(false)} 
+                            className="p-1"
+                        >
+                            <Ionicons name="close" size={18} color="#6b7280" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        );
+    };
+
     if (isSuccess) {
         return (
             <SafeAreaView className="flex-1 bg-lightGray">
@@ -239,10 +326,10 @@ export default function ChangePasswordScreen() {
 
                     <View className="mb-8">
                         <Text className="text-2xl font-bold text-center text-gray-800 mb-4">
-                            {isForgotPasswordFlow ? 'Password Reset Successfully' : 'Password Changed Successfully'}
+                            {(isForgotPasswordFlow || !isUserAuthenticated) ? 'Password Reset Successfully' : 'Password Changed Successfully'}
                         </Text>
                         <Text className="text-base text-center text-gray-500 leading-6">
-                            {isForgotPasswordFlow 
+                            {(isForgotPasswordFlow || !isUserAuthenticated)
                                 ? 'Your password has been reset successfully. You can now log in with your new password.'
                                 : 'Your password has been updated successfully. You can continue using the app with your new password.'
                             }
@@ -250,9 +337,9 @@ export default function ChangePasswordScreen() {
                     </View>
 
                     <Button
-                        title={isForgotPasswordFlow ? "Back to Login" : "Done"}
+                        title={(isForgotPasswordFlow || !isUserAuthenticated) ? "Back to Login" : "Done"}
                         variant="primary"
-                        onPress={isForgotPasswordFlow ? () => router.replace('/(auth)/customer-login') : handleDone}
+                        onPress={(isForgotPasswordFlow || !isUserAuthenticated) ? () => router.replace('/(auth)/customer-login') : handleDone}
                     />
                 </View>
             </SafeAreaView>
@@ -262,6 +349,9 @@ export default function ChangePasswordScreen() {
     return (
         <SafeAreaView className="flex-1 bg-lightGray">
             <StatusBar barStyle="dark-content" />
+
+            {/* Temporary Password Toast */}
+            <TempPasswordToast />
 
             {/* Header */}
             <View className="flex-row items-center p-6 pt-12">
@@ -298,17 +388,17 @@ export default function ChangePasswordScreen() {
                     {/* Title and Subtitle */}
                     <View className="mb-8">
                         <Text className="text-2xl font-bold text-center text-gray-800 mb-2">
-                            {isForgotPasswordFlow ? 'Reset Your Password' : 'Change Your Password'}
+                            {(isForgotPasswordFlow || !isUserAuthenticated) ? 'Reset Your Password' : 'Change Your Password'}
                         </Text>
                         <Text className="text-base text-center text-gray-500 leading-6">
-                            {isForgotPasswordFlow 
-                                ? 'Create a new password for your account' 
+                            {(isForgotPasswordFlow || !isUserAuthenticated)
+                                ? 'Enter the temporary password from your email and create a new password' 
                                 : 'Enter your current password and choose a new one'
                             }
                         </Text>
 
                         {/* Status Messages */}
-                        {isForgotPasswordFlow ? (
+                        {(isForgotPasswordFlow || !isUserAuthenticated) ? (
                             <>
                                 {userEmail && (
                                     <View className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
@@ -318,32 +408,33 @@ export default function ChangePasswordScreen() {
                                 )}
                                 
                                 <View className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4">
-                                    <Text className="text-sm font-semibold text-green-800 mb-2">✅ Valid reset link</Text>
-                                    <Text className="text-sm text-green-700">Enter your new password below to complete the reset.</Text>
+                                    <Text className="text-sm font-semibold text-green-800 mb-2">🔑 Temporary Password Required</Text>
+                                    <Text className="text-sm text-green-700">Check your email for the temporary password and enter it below.</Text>
                                 </View>
                             </>
                         ) : null}
                     </View>
 
-                    {/* Current Password Input - Only show for authenticated users */}
-                    {!isForgotPasswordFlow && (
-                        <View className="mb-6">
-                            <TextInput
-                                placeholder="Current Password"
-                                value={currentPassword}
-                                onChangeText={(text) => {
-                                    setCurrentPassword(text);
-                                    if (error) setError(''); // Clear error when user types
-                                }}
-                                secureTextEntry
-                                variant={error && !currentPassword ? 'error' : 'default'}
-                                editable={!isLoading}
-                            />
-                            <Text className="text-xs mt-1 text-gray-500">
-                                Enter your current password to verify your identity
-                            </Text>
-                        </View>
-                    )}
+                    {/* Current Password Input - Show for both flows but with different labels */}
+                    <View className="mb-6">
+                        <TextInput
+                            placeholder={(isForgotPasswordFlow || !isUserAuthenticated) ? "Temporary Password from Email" : "Current Password"}
+                            value={currentPassword}
+                            onChangeText={(text) => {
+                                setCurrentPassword(text);
+                                if (error) setError(''); // Clear error when user types
+                            }}
+                            secureTextEntry
+                            variant={error && !currentPassword ? 'error' : 'default'}
+                            editable={!isLoading}
+                        />
+                        <Text className="text-xs mt-1 text-gray-500">
+                            {(isForgotPasswordFlow || !isUserAuthenticated)
+                                ? "Enter the temporary password sent to your email"
+                                : "Enter your current password to verify your identity"
+                            }
+                        </Text>
+                    </View>
 
                     {/* New Password Input */}
                     <View className="mb-6">
