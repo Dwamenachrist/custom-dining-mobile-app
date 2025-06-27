@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState } from 'react';
 import { View, Text, SafeAreaView, TouchableOpacity, ScrollView, StatusBar, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -9,7 +9,7 @@ type NotificationType = 'All' | 'order' | 'promotion' | 'reminder' | 'meal_plan'
 
 const TABS: NotificationType[] = ['All', 'order', 'promotion', 'reminder', 'meal_plan', 'system'];
 
-export default function CustomerNotificationsScreen() {
+export default function RestaurantNotificationsScreen() {
   const router = useRouter();
   const [selectedTab, setSelectedTab] = useState<NotificationType>('All');
   const [refreshing, setRefreshing] = useState(false);
@@ -62,7 +62,7 @@ export default function CustomerNotificationsScreen() {
       case 'order':
         return 'checkmark-circle';
       case 'promotion':
-        return 'pricetag';
+        return 'gift';
       case 'reminder':
         return 'time';
       case 'meal_plan':
@@ -158,66 +158,66 @@ export default function CustomerNotificationsScreen() {
         ) : filteredNotifications.length > 0 ? (
           filteredNotifications.map((notification) => (
             <TouchableOpacity
-            key={notification.id} 
+              key={notification.id}
               onPress={() => handleNotificationTap(notification)}
-            style={{
+              style={{
                 backgroundColor: notification.read ? '#f8f9fa' : '#A7D2A5',
-              borderRadius: 16,
-              padding: 16,
-              marginBottom: 16,
-              flexDirection: 'row',
+                borderRadius: 16,
+                padding: 16,
+                marginBottom: 16,
+                flexDirection: 'row',
                 alignItems: 'flex-start',
                 borderLeftWidth: 4,
                 borderLeftColor: notification.read ? '#e9ecef' : '#7BC97A',
-            }}
-          >
-            {/* Icon */}
-            <View 
-              style={{
-                width: 48,
-                height: 48,
-                  backgroundColor: notification.read ? '#e9ecef' : '#7BC97A',
-                borderRadius: 24,
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginRight: 16,
-                flexShrink: 0
               }}
             >
-              <Ionicons 
+              {/* Icon */}
+              <View 
+                style={{
+                  width: 48,
+                  height: 48,
+                  backgroundColor: notification.read ? '#e9ecef' : '#7BC97A',
+                  borderRadius: 24,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 16,
+                  flexShrink: 0
+                }}
+              >
+                <Ionicons 
                   name={getIconName(notification.type) as any} 
-                size={24} 
+                  size={24} 
                   color={notification.read ? '#6c757d' : '#ffffff'} 
-              />
-            </View>
-            
-            {/* Content */}
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                <Text style={{
-                  fontSize: 16,
+                />
+              </View>
+              
+              {/* Content */}
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                  <Text style={{
+                    fontSize: 16,
                     fontWeight: notification.read ? '500' : '600',
                     color: notification.read ? '#6c757d' : '#1f2937',
-                  flex: 1,
-                  paddingRight: 8
-                }}>
-                  {notification.title}
-                </Text>
-                <Text style={{
-                  fontSize: 12,
+                    flex: 1,
+                    paddingRight: 8
+                  }}>
+                    {notification.title}
+                  </Text>
+                  <Text style={{
+                    fontSize: 12,
                     color: notification.read ? '#adb5bd' : '#6b7280'
-                }}>
+                  }}>
                     {formatTimeAgo(notification.timestamp)}
+                  </Text>
+                </View>
+                <Text style={{
+                  fontSize: 14,
+                  color: notification.read ? '#adb5bd' : '#374151',
+                  lineHeight: 20
+                }}>
+                  {notification.message}
                 </Text>
               </View>
-              <Text style={{
-                fontSize: 14,
-                  color: notification.read ? '#adb5bd' : '#374151',
-                lineHeight: 20
-              }}>
-                {notification.message}
-              </Text>
-            </View>
 
               {/* Delete Button */}
               <TouchableOpacity 

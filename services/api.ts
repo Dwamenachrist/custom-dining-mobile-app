@@ -104,9 +104,10 @@ export interface RegistrationResponse {
 export interface LoginResponse {
   status: string;              // "success" or "error"
   token: string;               // JWT token
+  role: string;                // User role: "user" or "restaurant"
   forcePasswordChange: boolean; // Whether user must change password
   hasUserProfile: boolean;     // Whether user has completed dietary preferences setup
-  isEmailVerified: boolean;    // Whether user has verified their email
+  isEmailVerified?: boolean;   // Whether user has verified their email (optional)
   message?: string;            // Optional response message
 }
 

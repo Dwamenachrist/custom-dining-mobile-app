@@ -5,7 +5,8 @@ import { useRouter } from 'expo-router';
 import { colors } from '../theme/colors';
 import { useAuth } from '../auth-context';
 import { Button } from '../components/Button';
-import { getHybridRestaurants } from '../services/hybridMealService';
+import { getHybridRestaurants, getHybridMeals } from '../services/hybridMealService';
+import MealFilterService from '../services/mealFilterService';
 
 interface Restaurant {
   id: string;
@@ -45,10 +46,23 @@ export default function RestaurantsListScreen() {
   const [allRestaurants, setAllRestaurants] = useState<Restaurant[]>([]);
   const [showMore, setShowMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [personalizationInfo, setPersonalizationInfo] = useState<{
+    isPersonalized: boolean;
+    summary: string;
+  }>({ isPersonalized: false, summary: '' });
 
   useEffect(() => {
     loadRestaurants();
+    loadPersonalizationInfo();
   }, []);
+
+  const loadPersonalizationInfo = async () => {
+    const info = await MealFilterService.getPersonalizationInfo();
+    setPersonalizationInfo({
+      isPersonalized: info.isPersonalized,
+      summary: info.summary
+    });
+  };
 
   useEffect(() => {
     filterRestaurants();
@@ -59,11 +73,25 @@ export default function RestaurantsListScreen() {
       setLoading(true);
       console.log('🌐 Loading restaurants from hybrid service...');
       
-      const response = await getHybridRestaurants();
+      const [restaurantsResponse, mealsResponse] = await Promise.all([
+        getHybridRestaurants(),
+        getHybridMeals()
+      ]);
       
-      if (response.success && response.data && response.data.length > 0) {
+      if (restaurantsResponse.success && restaurantsResponse.data && restaurantsResponse.data.length > 0) {
         console.log('✅ Loaded restaurants from hybrid service!');
-        const convertedRestaurants = response.data.map(convertHybridRestaurant);
+        let convertedRestaurants = restaurantsResponse.data.map(convertHybridRestaurant);
+        
+        // Filter restaurants based on dietary preferences if meals data is available
+        if (mealsResponse.success && mealsResponse.data) {
+          console.log('🎯 Applying dietary preferences filter to restaurants...');
+          convertedRestaurants = await MealFilterService.filterRestaurantsByMeals(
+            restaurantsResponse.data,
+            mealsResponse.data
+          );
+          convertedRestaurants = convertedRestaurants.map(convertHybridRestaurant);
+        }
+        
         setAllRestaurants(convertedRestaurants);
       } else {
         console.log('⚠️ No restaurants available from hybrid service');
@@ -153,6 +181,7 @@ export default function RestaurantsListScreen() {
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         
+
         {/* Search Bar - Fixed padding */}
         <View style={styles.searchContainer}>
           <View style={styles.searchBar}>
@@ -303,6 +332,20 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  personalizationBanner: {
+    backgroundColor: colors.primary,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  personalizationText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   searchContainer: {
     paddingHorizontal: 16,

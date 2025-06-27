@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import AuthService from '../../services/authService';
 import { useAuth } from '../../auth-context';
 import { ComingSoonToast } from '../../components/ComingSoonToast';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SettingScreen() {
   const [mealAlerts, setMealAlerts] = React.useState(true);
@@ -40,7 +41,6 @@ export default function SettingScreen() {
   const handleOrders = () => showComingSoon('Order History');
   const handleLanguageSelection = () => showComingSoon('Language Selection');
   const handleVoiceInput = () => showComingSoon('Voice Input');
-  const handleFAQ = () => showComingSoon('FAQ & Help Center');
   const handleHelp = () => showComingSoon('Customer Support');
 
   // Toggle handlers with coming soon for actual functionality
@@ -70,9 +70,8 @@ export default function SettingScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // TODO: Replace with actual user ID or endpoint as needed
-              await AuthService.logout(); // Log out locally first
-              // Optionally call delete API here, e.g. await api.delete('/users/me');
+              // Clear all local user data
+              await AsyncStorage.clear();
               setIsLoggedIn(false);
               router.replace('/(auth)/customer-login');
             } catch (error) {
@@ -193,8 +192,8 @@ export default function SettingScreen() {
 
         {/* Support Section */}
         <Text style={styles.sectionTitle}>Support</Text>
-        <TouchableOpacity style={styles.row} onPress={handleFAQ}>
-          <Text style={styles.label}>FAQ</Text>
+        <TouchableOpacity style={styles.row} onPress={() => router.push('/faq-chatbot' as any)}>
+          <Text style={styles.label}>FAQ & Chatbot</Text>
           <Ionicons name="help-circle-outline" size={20} color={colors.gray} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.row} onPress={handleHelp}>

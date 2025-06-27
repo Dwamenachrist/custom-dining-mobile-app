@@ -1,14 +1,19 @@
 ﻿// Updated lunch.tsx - Complete Order Now and Add to Plan functionality
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Image, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors } from '../theme/colors';
 import { useAuth } from '../auth-context';
 import { useCart } from '../cart-context';
 import MealPlanService from '../services/mealPlanService';
-import MealPlanToast from '../components/MealPlanToast';
+import { NotificationToast } from '../components/NotificationToast';
+import { getHybridMeals } from '../services/hybridMealService';
+import MealFilterService, { FilteredMeal as OriginalFilteredMeal } from '../services/mealFilterService';
+import { addMealToFavorites, removeMealFromFavorites, getFavoriteMeals } from '../services/api';
+
+type FilteredMeal = OriginalFilteredMeal & { isFavorite?: boolean };
 
 interface Meal {
   id: string;
@@ -19,6 +24,8 @@ interface Meal {
   calories: string;
   rating: number;
   price: number;
+  restaurant?: string;
+  isFavorite?: boolean;
 }
 
 const LUNCH_MEALS: Meal[] = [
@@ -89,9 +96,103 @@ export default function LunchScreen() {
   const { isLoggedIn } = useAuth();
   const { addToCart } = useCart();
   const [selectedSort, setSelectedSort] = useState('Most Popular');
+  const [meals, setMeals] = useState<FilteredMeal[]>([]);
+  const [loading, setLoading] = useState(true);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error' | 'cart'>('success');
+  const [personalizationInfo, setPersonalizationInfo] = useState<{
+    isPersonalized: boolean;
+    summary: string;
+  }>({ isPersonalized: false, summary: '' });
+  const [favoriteMealIds, setFavoriteMealIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    loadLunchMeals();
+    loadPersonalizationInfo();
+    loadFavorites();
+  }, []);
+
+  const loadFavorites = async () => {
+    if (!isLoggedIn) return;
+    
+    try {
+      const response = await getFavoriteMeals();
+      if (response.success && response.data) {
+        const favoriteIds = new Set(response.data.map(meal => meal.id));
+        setFavoriteMealIds(favoriteIds);
+      }
+    } catch (error) {
+      console.error('❌ Error loading favorites:', error);
+    }
+  };
+
+  const loadPersonalizationInfo = async () => {
+    const info = await MealFilterService.getPersonalizationInfo();
+    setPersonalizationInfo({
+      isPersonalized: info.isPersonalized,
+      summary: info.summary
+    });
+  };
+
+  const loadLunchMeals = async () => {
+    try {
+      setLoading(true);
+      console.log('🍽️ Loading lunch meals...');
+      
+      const response = await getHybridMeals();
+      
+      if (response.success && response.data) {
+        // Use the centralized filtering service
+        const filteredMeals = await MealFilterService.filterMealsForCategory(
+          response.data, 
+          'lunch', 
+          true // Apply dietary preferences filtering
+        );
+        
+        if (filteredMeals.length === 0) {
+          // Convert fallback meals to FilteredMeal format
+          const fallbackMeals = LUNCH_MEALS.map(meal => ({
+            ...meal,
+            dietaryTags: meal.tags,
+            category: 'lunch',
+            isFavorite: favoriteMealIds.has(meal.id)
+          }));
+          setMeals(fallbackMeals);
+        } else {
+          // Add favorite status to filtered meals
+          const mealsWithFavorites = filteredMeals.map(meal => ({
+            ...meal,
+            isFavorite: favoriteMealIds.has(meal.id)
+          }));
+          setMeals(mealsWithFavorites);
+        }
+      } else {
+        // Convert fallback meals to FilteredMeal format
+        const fallbackMeals = LUNCH_MEALS.map(meal => ({
+          ...meal,
+          dietaryTags: meal.tags,
+          category: 'lunch',
+          isFavorite: favoriteMealIds.has(meal.id)
+        }));
+        setMeals(fallbackMeals);
+      }
+      
+      console.log('✅ Lunch meals loaded!');
+    } catch (error) {
+      console.error('❌ Error loading lunch meals:', error);
+      // Convert fallback meals to FilteredMeal format
+      const fallbackMeals = LUNCH_MEALS.map(meal => ({
+        ...meal,
+        dietaryTags: meal.tags,
+        category: 'lunch',
+        isFavorite: favoriteMealIds.has(meal.id)
+      }));
+      setMeals(fallbackMeals);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleMealPress = (meal: Meal) => {
     router.push({
@@ -127,7 +228,7 @@ export default function LunchScreen() {
         setToastType('error');
       }
     } catch (error) {
-      console.error(' Error adding meal to plan:', error);
+      console.error('❌ Error adding meal to plan:', error);
       setToastVisible(true);
       setToastMessage('Failed to add meal to plan. Please try again.');
       setToastType('error');
@@ -146,7 +247,7 @@ export default function LunchScreen() {
       name: meal.name,
       price: meal.price,
       image: meal.image,
-      restaurant: 'Restaurant'
+      restaurant: meal.restaurant || 'Restaurant'
     });
     
     // Show cart toast
@@ -155,6 +256,62 @@ export default function LunchScreen() {
     setToastType('cart');
     
     console.log('Added to cart:', meal.name);
+  };
+
+  const handleFavoriteToggle = async (meal: Meal) => {
+    if (!isLoggedIn) {
+      router.push('/(auth)/customer-login');
+      return;
+    }
+
+    try {
+      const isFavorite = favoriteMealIds.has(meal.id);
+      
+      if (isFavorite) {
+        // Remove from favorites
+        const response = await removeMealFromFavorites(meal.id);
+        if (response.success) {
+          const newFavorites = new Set(favoriteMealIds);
+          newFavorites.delete(meal.id);
+          setFavoriteMealIds(newFavorites);
+          
+          // Update meals state
+          setMeals(prevMeals => 
+            prevMeals.map(m => 
+              m.id === meal.id ? { ...m, isFavorite: false } : m
+            )
+          );
+          
+          setToastVisible(true);
+          setToastMessage(`${meal.name} removed from favorites`);
+          setToastType('success');
+        }
+      } else {
+        // Add to favorites
+        const response = await addMealToFavorites(meal.id);
+        if (response.success) {
+          const newFavorites = new Set(favoriteMealIds);
+          newFavorites.add(meal.id);
+          setFavoriteMealIds(newFavorites);
+          
+          // Update meals state
+          setMeals(prevMeals => 
+            prevMeals.map(m => 
+              m.id === meal.id ? { ...m, isFavorite: true } : m
+            )
+          );
+          
+          setToastVisible(true);
+          setToastMessage(`${meal.name} added to favorites`);
+          setToastType('success');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error toggling favorite:', error);
+      setToastVisible(true);
+      setToastMessage('Failed to update favorites. Please try again.');
+      setToastType('error');
+    }
   };
 
   return (
@@ -171,6 +328,15 @@ export default function LunchScreen() {
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Personalization Status */}
+        {personalizationInfo.isPersonalized && (
+          <View style={styles.personalizationBanner}>
+            <Text style={styles.personalizationText}>
+              {personalizationInfo.summary}
+            </Text>
+          </View>
+        )}
+
         {/* Sort Section */}
         <View style={styles.sortContainer}>
           <Text style={styles.sortLabel}>Sort by</Text>
@@ -182,26 +348,21 @@ export default function LunchScreen() {
 
         {/* Meal Cards */}
         <View style={styles.mealsList}>
-          {LUNCH_MEALS.map((meal) => (
+          {loading ? (
+            <ActivityIndicator size="large" color={colors.primary} />
+          ) : (
+            meals.map((meal) => (
+              <View key={meal.id} style={styles.mealCard}>
+                {/* Horizontal Layout: Image | Content | Heart */}
             <TouchableOpacity
-              key={meal.id}
-              style={styles.mealCard}
+                  style={styles.mealContent}
               onPress={() => handleMealPress(meal)}
               activeOpacity={0.95}
             >
-              <TouchableOpacity 
-                style={styles.heartButton}
-                onPress={() => console.log('Heart pressed')}
-              >
-                <Ionicons name="heart-outline" size={20} color="#666" />
-              </TouchableOpacity>
-              
-              {/* Card Content - Horizontal Layout */}
-              <View style={styles.cardContent}>
                 {/* Image on the left */}
                 <Image source={meal.image} style={styles.mealImage} />
                 
-                {/* Content on the right */}
+                  {/* Content in the middle */}
                 <View style={styles.mealInfo}>
                   <Text style={styles.mealName}>{meal.name}</Text>
                   <Text style={styles.mealDescription}>{meal.description}</Text>
@@ -234,14 +395,27 @@ export default function LunchScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
+                </TouchableOpacity>
+                
+                {/* Heart icon on the right */}
+                <TouchableOpacity 
+                  style={styles.heartButton}
+                  onPress={() => handleFavoriteToggle(meal)}
+                >
+                  <Ionicons 
+                    name={meal.isFavorite ? "heart" : "heart-outline"} 
+                    size={24} 
+                    color={meal.isFavorite ? "#ff4444" : "#666"} 
+                  />
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
-          ))}
+            ))
+          )}
         </View>
 
         {/* Load More Section */}
         <View style={styles.loadMoreSection}>
-          <Text style={styles.showingText}>Showing 6 of 20 results</Text>
+          <Text style={styles.showingText}>Showing {meals.length} of {meals.length} results</Text>
           <TouchableOpacity style={styles.loadMoreButton}>
             <Text style={styles.loadMoreText}>Load more</Text>
           </TouchableOpacity>
@@ -249,7 +423,7 @@ export default function LunchScreen() {
       </ScrollView>
       
       {/* Toast Component */}
-      <MealPlanToast
+      <NotificationToast
         visible={toastVisible}
         message={toastMessage}
         type={toastType}
@@ -317,26 +491,25 @@ const styles = StyleSheet.create({
   mealCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
-    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 12,
+  },
+  mealContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   heartButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    zIndex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 16,
-    padding: 4,
-  },
-  cardContent: {
-    flexDirection: 'row',
-    gap: 12,
+    padding: 8,
+    marginLeft: 8,
   },
   mealImage: {
     width: 80,
@@ -435,5 +608,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.primary,
     fontWeight: '600',
+  },
+  personalizationBanner: {
+    padding: 16,
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  personalizationText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+    textAlign: 'center',
   },
 });

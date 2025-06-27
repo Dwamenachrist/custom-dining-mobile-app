@@ -41,7 +41,7 @@ export default function MenuManagementScreen() {
       const response = await api.get(`/meals/restaurant/${restaurantId}`);
       
       if (response.success && response.data) {
-        const convertedItems = response.data.map((item: any) => ({
+        const convertedItems = (response.data as any[]).map((item: any) => ({
           id: item._id || item.id,
           name: item.name,
           description: item.description,

@@ -1,14 +1,19 @@
 ﻿// Updated dinner.tsx - Complete Order Now and Add to Plan functionality
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Image, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors } from '../theme/colors';
 import { useAuth } from '../auth-context';
 import { useCart } from '../cart-context';
 import MealPlanService from '../services/mealPlanService';
-import MealPlanToast from '../components/MealPlanToast';
+import { NotificationToast } from '../components/NotificationToast';
+import { getHybridMeals } from '../services/hybridMealService';
+import MealFilterService, { FilteredMeal as OriginalFilteredMeal } from '../services/mealFilterService';
+import { addMealToFavorites, removeMealFromFavorites, getFavoriteMeals } from '../services/api';
+
+type FilteredMeal = OriginalFilteredMeal & { isFavorite?: boolean };
 
 interface Meal {
   id: string;
@@ -19,28 +24,30 @@ interface Meal {
   calories: string;
   rating: number;
   price: number;
+  restaurant?: string;
+  isFavorite?: boolean;
 }
 
 const DINNER_MEALS: Meal[] = [
   {
     id: '1',
-    name: 'Beans and Potato',
-    description: 'Protein-rich beans cooked with tender potatoes in a savory sauce',
-    image: require('../assets/meals/Beans and Potato.png'),
-    tags: ['High-Protein', 'Vegan'],
+    name: 'Grilled Fish and Veggies',
+    description: 'Fresh grilled fish served with seasonal vegetables',
+    image: require('../assets/meals/Grilled Fish and Veggies.png'),
+    tags: ['High-Protein', 'Low-Carb'],
     calories: '380 Cal Per Serving',
-    rating: 4.5,
-    price: 3500
+    rating: 4.7,
+    price: 6000
   },
   {
     id: '2',
     name: 'Plantain and Soup',
-    description: 'Sweet plantain served with traditional Nigerian soup',
+    description: 'Roasted plantain served with traditional pepper soup',
     image: require('../assets/meals/Plantain and Soup.png'),
     tags: ['Traditional', 'Comfort-Food'],
     calories: '420 Cal Per Serving',
-    rating: 4.6,
-    price: 4000
+    rating: 4.5,
+    price: 4500
   },
   {
     id: '3',
@@ -50,37 +57,37 @@ const DINNER_MEALS: Meal[] = [
     tags: ['Traditional', 'Filling'],
     calories: '450 Cal Per Serving',
     rating: 4.4,
-    price: 3800
+    price: 4000
   },
   {
     id: '4',
-    name: 'Unripe Plantain Porridge',
-    description: 'Nutritious unripe plantain cooked in a flavorful broth',
-    image: require('../assets/meals/Unripe Plantain porridge.png'),
-    tags: ['Healthy', 'Traditional'],
-    calories: '350 Cal Per Serving',
-    rating: 4.3,
-    price: 3200
+    name: 'Veggie Sauce and Yam',
+    description: 'Nutritious vegetable sauce served with boiled yam',
+    image: require('../assets/meals/Veggie Sauce and Yam.png'),
+    tags: ['Vegan', 'Nutritious'],
+    calories: '380 Cal Per Serving',
+    rating: 4.6,
+    price: 4200
   },
   {
     id: '5',
-    name: 'Veggie Sauce and Yam',
-    description: 'Fresh vegetable sauce served with boiled yam',
-    image: require('../assets/meals/Veggie Sauce and Yam.png'),
-    tags: ['Vegan', 'Nutritious'],
-    calories: '320 Cal Per Serving',
-    rating: 4.7,
-    price: 3600
+    name: 'Unripe Plantain Porridge',
+    description: 'Hearty porridge made with unripe plantain and spices',
+    image: require('../assets/meals/Unripe Plantain porridge.png'),
+    tags: ['Traditional', 'Healthy'],
+    calories: '340 Cal Per Serving',
+    rating: 4.3,
+    price: 3800
   },
   {
     id: '6',
-    name: 'Plantain and Egg Sauce',
-    description: 'Sweet fried plantain served with scrambled eggs in tomato and pepper sauce',
-    image: require('../assets/meals/Plantain and Egg sauce.png'),
-    tags: ['Comfort-Food', 'High-Protein'],
-    calories: '380 Cal Per Serving',
-    rating: 4.4,
-    price: 4500
+    name: 'Beans and Potato',
+    description: 'Protein-rich beans cooked with sweet potatoes',
+    image: require('../assets/meals/Beans and Potato.png'),
+    tags: ['Vegan', 'High-Protein'],
+    calories: '400 Cal Per Serving',
+    rating: 4.5,
+    price: 3500
   }
 ];
 
@@ -89,11 +96,105 @@ export default function DinnerScreen() {
   const { isLoggedIn } = useAuth();
   const { addToCart } = useCart();
   const [selectedSort, setSelectedSort] = useState('Most Popular');
+  const [meals, setMeals] = useState<FilteredMeal[]>([]);
+  const [loading, setLoading] = useState(true);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error' | 'cart'>('success');
+  const [personalizationInfo, setPersonalizationInfo] = useState<{
+    isPersonalized: boolean;
+    summary: string;
+  }>({ isPersonalized: false, summary: '' });
+  const [favoriteMealIds, setFavoriteMealIds] = useState<Set<string>>(new Set());
 
-  const handleMealPress = (meal: Meal) => {
+  useEffect(() => {
+    loadDinnerMeals();
+    loadPersonalizationInfo();
+    loadFavorites();
+  }, []);
+
+  const loadFavorites = async () => {
+    if (!isLoggedIn) return;
+    
+    try {
+      const response = await getFavoriteMeals();
+      if (response.success && response.data) {
+        const favoriteIds = new Set(response.data.map(meal => meal.id));
+        setFavoriteMealIds(favoriteIds);
+      }
+    } catch (error) {
+      console.error('❌ Error loading favorites:', error);
+    }
+  };
+
+  const loadPersonalizationInfo = async () => {
+    const info = await MealFilterService.getPersonalizationInfo();
+    setPersonalizationInfo({
+      isPersonalized: info.isPersonalized,
+      summary: info.summary
+    });
+  };
+
+  const loadDinnerMeals = async () => {
+    try {
+      setLoading(true);
+      console.log('🌆 Loading dinner meals...');
+      
+      const response = await getHybridMeals();
+      
+      if (response.success && response.data) {
+        // Use the centralized filtering service
+        const filteredMeals = await MealFilterService.filterMealsForCategory(
+          response.data, 
+          'dinner', 
+          true // Apply dietary preferences filtering
+        );
+        
+        if (filteredMeals.length === 0) {
+          // Convert fallback meals to FilteredMeal format
+          const fallbackMeals = DINNER_MEALS.map(meal => ({
+            ...meal,
+            dietaryTags: meal.tags,
+            category: 'dinner',
+            isFavorite: favoriteMealIds.has(meal.id)
+          }));
+          setMeals(fallbackMeals);
+        } else {
+          // Add favorite status to filtered meals
+          const mealsWithFavorites = filteredMeals.map(meal => ({
+            ...meal,
+            isFavorite: favoriteMealIds.has(meal.id)
+          }));
+          setMeals(mealsWithFavorites);
+        }
+      } else {
+        // Convert fallback meals to FilteredMeal format
+        const fallbackMeals = DINNER_MEALS.map(meal => ({
+          ...meal,
+          dietaryTags: meal.tags,
+          category: 'dinner',
+          isFavorite: favoriteMealIds.has(meal.id)
+        }));
+        setMeals(fallbackMeals);
+      }
+      
+      console.log('✅ Dinner meals loaded!');
+    } catch (error) {
+      console.error('❌ Error loading dinner meals:', error);
+      // Convert fallback meals to FilteredMeal format
+      const fallbackMeals = DINNER_MEALS.map(meal => ({
+        ...meal,
+        dietaryTags: meal.tags,
+        category: 'dinner',
+        isFavorite: favoriteMealIds.has(meal.id)
+      }));
+      setMeals(fallbackMeals);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMealPress = (meal: FilteredMeal) => {
     router.push({
       pathname: '/meal/[id]',
       params: { 
@@ -108,7 +209,7 @@ export default function DinnerScreen() {
     });
   };
 
-  const handleAddToPlan = async (meal: Meal) => {
+  const handleAddToPlan = async (meal: FilteredMeal) => {
     if (!isLoggedIn) {
       router.push('/(auth)/customer-login');
       return;
@@ -127,14 +228,14 @@ export default function DinnerScreen() {
         setToastType('error');
       }
     } catch (error) {
-      console.error(' Error adding meal to plan:', error);
+      console.error('❌ Error adding meal to plan:', error);
       setToastVisible(true);
       setToastMessage('Failed to add meal to plan. Please try again.');
       setToastType('error');
     }
   };
 
-  const handleOrder = (meal: Meal) => {
+  const handleOrder = (meal: FilteredMeal) => {
     if (!isLoggedIn) {
       router.push('/(auth)/customer-login');
       return;
@@ -146,7 +247,7 @@ export default function DinnerScreen() {
       name: meal.name,
       price: meal.price,
       image: meal.image,
-      restaurant: 'Restaurant'
+      restaurant: meal.restaurant || 'Restaurant'
     });
     
     // Show cart toast
@@ -155,6 +256,62 @@ export default function DinnerScreen() {
     setToastType('cart');
     
     console.log('Added to cart:', meal.name);
+  };
+
+  const handleFavoriteToggle = async (meal: FilteredMeal) => {
+    if (!isLoggedIn) {
+      router.push('/(auth)/customer-login');
+      return;
+    }
+
+    try {
+      const isFavorite = favoriteMealIds.has(meal.id);
+      
+      if (isFavorite) {
+        // Remove from favorites
+        const response = await removeMealFromFavorites(meal.id);
+        if (response.success) {
+          const newFavorites = new Set(favoriteMealIds);
+          newFavorites.delete(meal.id);
+          setFavoriteMealIds(newFavorites);
+          
+          // Update meals state
+          setMeals(prevMeals => 
+            prevMeals.map(m => 
+              m.id === meal.id ? { ...m, isFavorite: false } : m
+            )
+          );
+          
+          setToastVisible(true);
+          setToastMessage(`${meal.name} removed from favorites`);
+          setToastType('success');
+        }
+      } else {
+        // Add to favorites
+        const response = await addMealToFavorites(meal.id);
+        if (response.success) {
+          const newFavorites = new Set(favoriteMealIds);
+          newFavorites.add(meal.id);
+          setFavoriteMealIds(newFavorites);
+          
+          // Update meals state
+          setMeals(prevMeals => 
+            prevMeals.map(m => 
+              m.id === meal.id ? { ...m, isFavorite: true } : m
+            )
+          );
+          
+          setToastVisible(true);
+          setToastMessage(`${meal.name} added to favorites`);
+          setToastType('success');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error toggling favorite:', error);
+      setToastVisible(true);
+      setToastMessage('Failed to update favorites. Please try again.');
+      setToastType('error');
+    }
   };
 
   return (
@@ -171,6 +328,15 @@ export default function DinnerScreen() {
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Personalization Status */}
+        {personalizationInfo.isPersonalized && (
+          <View style={styles.personalizationBanner}>
+            <Text style={styles.personalizationText}>
+              {personalizationInfo.summary}
+            </Text>
+          </View>
+        )}
+
         {/* Sort Section */}
         <View style={styles.sortContainer}>
           <Text style={styles.sortLabel}>Sort by</Text>
@@ -182,7 +348,10 @@ export default function DinnerScreen() {
 
         {/* Meal Cards */}
         <View style={styles.mealsList}>
-          {DINNER_MEALS.map((meal) => (
+          {loading ? (
+            <ActivityIndicator size="large" color={colors.primary} />
+          ) : (
+            meals.map((meal) => (
             <TouchableOpacity
               key={meal.id}
               style={styles.mealCard}
@@ -191,9 +360,13 @@ export default function DinnerScreen() {
             >
               <TouchableOpacity 
                 style={styles.heartButton}
-                onPress={() => console.log('Heart pressed')}
+                  onPress={() => handleFavoriteToggle(meal)}
               >
-                <Ionicons name="heart-outline" size={20} color="#666" />
+                  <Ionicons 
+                    name={meal.isFavorite ? "heart" : "heart-outline"} 
+                    size={20} 
+                    color={meal.isFavorite ? "#ff4444" : "#666"} 
+                  />
               </TouchableOpacity>
               
               {/* Card Content - Horizontal Layout */}
@@ -236,12 +409,13 @@ export default function DinnerScreen() {
                 </View>
               </View>
             </TouchableOpacity>
-          ))}
+            ))
+          )}
         </View>
 
         {/* Load More Section */}
         <View style={styles.loadMoreSection}>
-          <Text style={styles.showingText}>Showing 6 of 20 results</Text>
+          <Text style={styles.showingText}>Showing {meals.length} of {meals.length} results</Text>
           <TouchableOpacity style={styles.loadMoreButton}>
             <Text style={styles.loadMoreText}>Load more</Text>
           </TouchableOpacity>
@@ -249,7 +423,7 @@ export default function DinnerScreen() {
       </ScrollView>
       
       {/* Toast Component */}
-      <MealPlanToast
+      <NotificationToast
         visible={toastVisible}
         message={toastMessage}
         type={toastType}
@@ -435,5 +609,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.primary,
     fontWeight: '600',
+  },
+  personalizationBanner: {
+    padding: 16,
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  personalizationText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+    textAlign: 'center',
   },
 });

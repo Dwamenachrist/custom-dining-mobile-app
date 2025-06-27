@@ -11,6 +11,7 @@ interface User {
   restaurantId?: string;
   isEmailVerified?: boolean;
   hasProfile?: boolean; // Whether user has completed dietary preferences setup
+  forcePasswordChange?: boolean;
 }
 
 interface AuthContextType {
@@ -25,6 +26,7 @@ interface AuthContextType {
   setJwt: (jwt: string | null) => void;
   setIsEmailVerified: (verified: boolean) => void;
   setVerificationGracePeriod: (timestamp: number | null) => void;
+  refreshAuthState: () => Promise<void>; // Add method to refresh auth state
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -37,57 +39,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [verificationGracePeriod, setVerificationGracePeriod] = useState<number | null>(null);
 
-  // This effect runs on app startup to check for a saved session.
+  // Refresh auth state from storage
+  const refreshAuthState = async () => {
+    try {
+      console.log('🔄 Refreshing auth state...');
+      
+      const [token, loginStatus, userType, userName, userEmail, emailVerified] = await Promise.all([
+        AsyncStorage.getItem('auth_token'),
+        AsyncStorage.getItem('isLoggedIn'),
+        AsyncStorage.getItem('userType'),
+        AsyncStorage.getItem('userName'),
+        AsyncStorage.getItem('userEmail'),
+        AsyncStorage.getItem('isEmailVerified')
+      ]);
+      
+      console.log('🔍 Auth state check:', { 
+        hasToken: !!token, 
+        loginStatus, 
+        userType, 
+        userName, 
+        userEmail,
+        emailVerified
+      });
+      
+      if (token && loginStatus === 'true') {
+        let userObj = null;
+        if (userName || userEmail) {
+          userObj = {
+            id: userEmail || 'user',
+            email: userEmail || '',
+            role: userType === 'customer' ? 'user' : 'restaurant',
+            isEmailVerified: emailVerified === 'true'
+          };
+        }
+        
+        setIsLoggedIn(true);
+        setUser(userObj);
+        setJwt(token);
+        setIsEmailVerified(emailVerified === 'true');
+        
+        console.log('✅ Auth state restored:', { userType, hasUser: !!userObj });
+      } else {
+        console.log('ℹ️ No valid authentication found');
+        setIsLoggedIn(false);
+        setUser(null);
+        setJwt(null);
+        setIsEmailVerified(false);
+      }
+    } catch (e) {
+      console.error("❌ Auth state refresh failed:", e);
+      setIsLoggedIn(false);
+      setUser(null);
+      setJwt(null);
+      setIsEmailVerified(false);
+    }
+  };
+
+  // Initial auth check on app startup
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        console.log('🔍 Auth Context: Checking authentication...');
-        
-        // Just check for token and login status - simplified
-        const [token, loginStatus, userType, userName, userEmail] = await Promise.all([
-          AsyncStorage.getItem('auth_token'),
-          AsyncStorage.getItem('isLoggedIn'),
-          AsyncStorage.getItem('userType'),
-          AsyncStorage.getItem('userName'),
-          AsyncStorage.getItem('userEmail')
-        ]);
-        
-        console.log('🔍 Auth check:', { 
-          hasToken: !!token, 
-          loginStatus, 
-          userType, 
-          userName, 
-          userEmail 
-        });
-        
-        // Simple check: if we have token and login status is true
-        if (token && loginStatus === 'true') {
-          // Create user object if we have user info
-          let userObj = null;
-          if (userName || userEmail) {
-            userObj = {
-              id: userEmail || 'user',
-              email: userEmail || '',
-              role: userType || 'customer',
-              isEmailVerified: true // Assume verified if logged in
-            };
-          }
-          
-          setIsLoggedIn(true);
-          setUser(userObj);
-          setJwt(token);
-          setIsEmailVerified(true);
-          
-          console.log('✅ Auth restored:', { userType, hasUser: !!userObj });
-        } else {
-          console.log('ℹ️ No authentication found');
-          setIsLoggedIn(false);
-          setUser(null);
-          setJwt(null);
-          setIsEmailVerified(false);
-        }
+        console.log('🚀 Initial auth check...');
+        await refreshAuthState();
       } catch (e) {
-        console.error("❌ Auth check failed:", e);
+        console.error("❌ Initial auth check failed:", e);
         setIsLoggedIn(false);
         setUser(null);
         setJwt(null);
@@ -96,14 +111,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Small delay to ensure all state updates are complete
         setTimeout(() => {
           setIsLoading(false);
-          console.log('✅ Auth check completed');
-        }, 50);
+          console.log('✅ Auth initialization completed');
+        }, 100);
       }
     };
 
     checkAuthStatus();
   }, []);
-
 
   return (
     <AuthContext.Provider value={{ 
@@ -117,7 +131,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser, 
       setJwt,
       setIsEmailVerified,
-      setVerificationGracePeriod
+      setVerificationGracePeriod,
+      refreshAuthState
     }}>
       {children}
     </AuthContext.Provider>

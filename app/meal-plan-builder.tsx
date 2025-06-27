@@ -51,9 +51,6 @@ export default function MealPlanBuilderScreen() {
   const [disliked, setDisliked] = useState('');
   const [meals, setMeals] = useState(DEFAULT_MEALS);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [showDebug, setShowDebug] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<string>('');
-  const [backendStatus, setBackendStatus] = useState<string>('Not tested');
   const [hasExistingProfile, setHasExistingProfile] = useState(false);
   const router = useRouter();
   const auth = useAuth();
@@ -72,13 +69,17 @@ export default function MealPlanBuilderScreen() {
       
       if (localMealPlan) {
         const mealPlanData: MealPlanData = JSON.parse(localMealPlan);
-        setMealGoal(mealPlanData.mealGoal);
-        setPlanDuration(mealPlanData.planDuration);
-        setRestrictions(mealPlanData.restrictions);
-        setDisliked(mealPlanData.disliked);
-        setMeals(mealPlanData.meals);
-        setHasExistingProfile(true);
-        console.log('✅ Loaded profile from local storage');
+        // Check if mealPlanData is valid (all required fields are present and not empty)
+        const isValid = mealPlanData && mealPlanData.mealGoal && mealPlanData.planDuration && Array.isArray(mealPlanData.meals) && mealPlanData.meals.length > 0;
+        if (isValid) {
+          setMealGoal(mealPlanData.mealGoal);
+          setPlanDuration(mealPlanData.planDuration);
+          setRestrictions(mealPlanData.restrictions);
+          setDisliked(mealPlanData.disliked);
+          setMeals(mealPlanData.meals);
+          setHasExistingProfile(true);
+          console.log('✅ Loaded profile from local storage');
+        }
       }
       
       // Try to fetch from backend if user is authenticated - but don't block UI
@@ -99,17 +100,19 @@ export default function MealPlanBuilderScreen() {
             };
             
             const mappedGoal = goalMapping[prefs.healthGoal] || 'Balanced nutrition';
-            setMealGoal(mappedGoal);
-            
             // Convert dietary restrictions back to frontend format
             const formattedRestrictions = prefs.dietaryRestrictions.map(restriction => {
               const formatted = restriction.replace('-', ' ');
               return formatted.charAt(0).toUpperCase() + formatted.slice(1);
             });
-            setRestrictions(formattedRestrictions);
-            
-            setHasExistingProfile(true);
-            console.log('✅ Loaded profile from backend');
+            // Only set as existing if backend profile is valid
+            const isBackendValid = prefs.healthGoal && Array.isArray(prefs.dietaryRestrictions);
+            if (isBackendValid) {
+              setMealGoal(mappedGoal);
+              setRestrictions(formattedRestrictions);
+              setHasExistingProfile(true);
+              console.log('✅ Loaded profile from backend');
+            }
           }
         } catch (error) {
           console.log('ℹ️ No existing backend profile found (this is okay)');
@@ -129,35 +132,8 @@ export default function MealPlanBuilderScreen() {
     );
   };
 
-  const testBackendConnection = async () => {
-    setBackendStatus('Testing...');
-    try {
-      const authToken = await AsyncStorage.getItem('auth_token');
-      if (!authToken) {
-        setBackendStatus('❌ No auth token');
-        Alert.alert('Test Failed', 'No authentication token found. Please log in first.');
-        return;
-      }
-      
-      // Test with a simple profile fetch
-      const response = await getUserProfile();
-      if (response.success) {
-        setBackendStatus('✅ Connected');
-        Alert.alert('✅ Backend Connected', 'Successfully connected to the backend!');
-      } else {
-        setBackendStatus('⚠️ Connected but no profile');
-        Alert.alert('⚠️ Connected', 'Backend is reachable but no profile found yet.');
-      }
-    } catch (error: any) {
-      setBackendStatus('❌ Connection failed');
-      Alert.alert('❌ Connection Failed', `Could not connect to backend: ${error.message}`);
-    }
-  };
-
   const handleGenerateMealPlan = async () => {
     setIsGenerating(true);
-    let debugLog = '🚀 MEAL PLAN BUILDER DEBUG\n\n';
-    
     try {
       // Prepare meal plan data
       const mealPlanData: MealPlanData = {
@@ -168,79 +144,43 @@ export default function MealPlanBuilderScreen() {
         meals
       };
       
-      debugLog += '📋 MEAL PLAN DATA:\n';
-      debugLog += `Goal: ${mealGoal}\n`;
-      debugLog += `Duration: ${planDuration}\n`;
-      debugLog += `Restrictions: ${restrictions.join(', ') || 'None'}\n`;
-      debugLog += `Disliked: ${disliked || 'None'}\n`;
-      debugLog += `Meals: ${meals.map(m => m.type).join(', ')}\n\n`;
-      
       // Transform to backend format
       const dietaryPreferences = transformMealPlanToDietaryPreferences(mealPlanData);
-      debugLog += '🔄 BACKEND FORMAT:\n';
-      debugLog += `Health Goal: ${dietaryPreferences.healthGoal}\n`;
-      debugLog += `Dietary Restrictions: ${dietaryPreferences.dietaryRestrictions.join(', ')}\n`;
-      debugLog += `Preferred Tags: ${dietaryPreferences.preferredMealTags.join(', ')}\n\n`;
       
       // Store meal plan preferences locally FIRST
       await AsyncStorage.setItem('mealPlan', JSON.stringify(mealPlanData));
       await AsyncStorage.setItem('dietaryPreferences', JSON.stringify(dietaryPreferences));
-      debugLog += '💾 SAVED TO LOCAL STORAGE\n\n';
       
       // Try to save to backend
       let backendSaved = false;
       const authToken = await AsyncStorage.getItem('auth_token');
-      debugLog += `🔑 AUTH TOKEN: ${authToken ? 'Found' : 'Not found'}\n`;
-      
       if (authToken) {
-        debugLog += '📡 ATTEMPTING BACKEND SAVE...\n';
-        
         const response = await saveDietaryPreferences(dietaryPreferences);
-        
         if (response.success) {
-          debugLog += '✅ BACKEND SUCCESS!\n';
           backendSaved = true;
-          
           // Mark user profile as complete
           await AsyncStorage.setItem('hasUserProfile', 'true');
-          debugLog += '🏠 USER PROFILE MARKED AS COMPLETE\n';
-          
           // Store email verification status
           await AsyncStorage.setItem('isEmailVerified', 'true');
-          debugLog += '📧 EMAIL VERIFICATION STATUS STORED\n';
-          
           // Try to fetch personalized meals
           try {
             const mealsResponse = await getUserMeals();
             if (mealsResponse.success && mealsResponse.data) {
-              debugLog += `🍽️ PERSONALIZED MEALS FETCHED: ${mealsResponse.data.length} meals\n`;
             }
           } catch (mealError) {
-            debugLog += `⚠️ Could not fetch personalized meals: ${mealError}\n`;
           }
-          
         } else {
-          debugLog += '❌ BACKEND FAILED!\n';
-          debugLog += `Error: ${response.message}\n`;
-          
           // Handle specific errors
           if (response.message?.includes('session has expired') || response.message?.includes('401')) {
-            debugLog += '🔐 SESSION EXPIRED - CONTINUING WITH LOCAL SAVE\n';
             // Don't fail the whole process, just continue locally
           }
         }
-      } else {
-        debugLog += '📱 NO AUTH TOKEN - CONTINUING WITH LOCAL SAVE\n';
       }
-      
       // ALWAYS mark profile as complete locally regardless of backend success
       await AsyncStorage.setItem('hasUserProfile', 'true');
-      debugLog += '🏠 LOCAL PROFILE MARKED AS COMPLETE\n';
-      
       // Update auth state
       await AsyncStorage.setItem('userType', 'customer');
       auth.setIsLoggedIn(true);
-      
       const userEmail = await AsyncStorage.getItem('userEmail') || 'user@email.com';
       auth.setUser({
         id: 'temp-user-id',
@@ -249,19 +189,11 @@ export default function MealPlanBuilderScreen() {
         isEmailVerified: true,
         hasProfile: true // Always true since we saved locally
       });
-      
-      debugLog += '🔐 USER LOGGED IN\n';
-      debugLog += `✅ MEAL PLAN GENERATION COMPLETE!\n`;
-      debugLog += `Backend Saved: ${backendSaved ? 'Yes' : 'No (Local only)'}\n`;
-      
-      setDebugInfo(debugLog);
-      
       // Show success and navigate
       Alert.alert(
-        hasExistingProfile ? 'Profile Updated!' : 'Meal Plan Created!',
-        `${backendSaved ? '✅ Saved to backend successfully' : '📱 Saved locally (will sync when connected)'}\n\n${hasExistingProfile ? 'Your dietary preferences have been updated.' : 'Your meal plan has been created.'}`,
+        'Meal plan saved successfully',
+        '',
         [
-          { text: 'View Debug', onPress: () => setShowDebug(true) },
           { 
             text: 'Continue to Home', 
             onPress: () => router.replace('/(customer-tabs)/home'),
@@ -269,24 +201,17 @@ export default function MealPlanBuilderScreen() {
           }
         ]
       );
-      
     } catch (error: any) {
-      debugLog += `❌ FATAL ERROR: ${error.message}\n`;
-      setDebugInfo(debugLog);
-      
       console.error('❌ Error generating meal plan:', error);
-      
       // Still try to save locally and continue
       try {
         await AsyncStorage.setItem('hasUserProfile', 'true');
         await AsyncStorage.setItem('userType', 'customer');
         auth.setIsLoggedIn(true);
-        
         Alert.alert(
-          'Meal Plan Saved Locally', 
-          'There was an issue connecting to the server, but your meal plan has been saved locally. You can continue to use the app.',
+          'Meal plan saved successfully',
+          '',
           [
-            { text: 'View Debug', onPress: () => setShowDebug(true) },
             { 
               text: 'Continue to Home', 
               onPress: () => router.replace('/(customer-tabs)/home')
@@ -301,8 +226,6 @@ export default function MealPlanBuilderScreen() {
     }
   };
 
-
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.lightGray, marginTop: 60 }}>
       <StatusBar barStyle="dark-content" />
@@ -312,49 +235,7 @@ export default function MealPlanBuilderScreen() {
         <Text style={{ fontWeight: 'bold', fontSize: 18, color: colors.black, flex: 1, textAlign: 'center' }}>
           {hasExistingProfile ? 'Update Your Meal Plan' : 'Build your Meal Plan'}
         </Text>
-        <TouchableOpacity onPress={() => setShowDebug(!showDebug)} style={{ marginLeft: 8 }}>
-          <Ionicons name={showDebug ? "close" : "bug"} size={24} color={colors.primary} />
-        </TouchableOpacity>
       </View>
-
-      {/* Profile Status Banner */}
-      {hasExistingProfile && (
-        <View style={{ backgroundColor: colors.primary, margin: 20, padding: 16, borderRadius: 8, marginBottom: 10 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Ionicons name="checkmark-circle" size={20} color={colors.white} style={{ marginRight: 8 }} />
-            <Text style={{ color: colors.white, fontWeight: 'bold', fontSize: 16 }}>Existing Profile Found</Text>
-          </View>
-          <Text style={{ color: '#B5C4B1', fontSize: 14, marginTop: 4 }}>
-            Your preferences have been loaded. Make any changes and save to update.
-          </Text>
-        </View>
-      )}
-
-      {/* Debug Panel */}
-      {showDebug && (
-        <View style={{ backgroundColor: colors.black, margin: 20, padding: 16, borderRadius: 8, marginBottom: 10 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <Text style={{ color: colors.white, fontWeight: 'bold', fontSize: 16 }}>🐛 Debug Panel</Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TouchableOpacity 
-                onPress={testBackendConnection}
-                style={{ backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 4 }}>
-                <Text style={{ color: colors.white, fontSize: 12, fontWeight: 'bold' }}>Test Backend</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-          
-          <Text style={{ color: '#00ff00', fontSize: 12, marginBottom: 8 }}>
-            Backend Status: {backendStatus}
-          </Text>
-          
-          <ScrollView style={{ maxHeight: 200 }}>
-            <Text style={{ color: '#00ff00', fontSize: 10, fontFamily: 'monospace' }}>
-              {debugInfo || 'No debug info yet. Generate meal plan to see data flow.'}
-            </Text>
-          </ScrollView>
-        </View>
-      )}
 
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
         {/* Meal Goals */}
@@ -363,7 +244,7 @@ export default function MealPlanBuilderScreen() {
           <Picker
             selectedValue={mealGoal}
             onValueChange={setMealGoal}
-            style={{ height: 55 }}>
+            style={{ height: 55, color: colors.primary }}>
             {MEAL_GOALS.map((goal) => (
               <Picker.Item key={goal} label={goal} value={goal} />
             ))}
@@ -375,7 +256,7 @@ export default function MealPlanBuilderScreen() {
           <Picker
             selectedValue={planDuration}
             onValueChange={setPlanDuration}
-            style={{ height: 55 }}>
+            style={{ height: 55, color: colors.primary }}>
             {PLAN_DURATIONS.map((d) => (
               <Picker.Item key={d} label={d} value={d} />
             ))}
@@ -415,7 +296,7 @@ export default function MealPlanBuilderScreen() {
           placeholder="E.g. mushrooms, onions"
           value={disliked}
           onChangeText={setDisliked}
-          style={{ marginBottom: 18 }}
+          style={{ marginBottom: 18, color: colors.primary }}
         />
         {/* Customize Daily Meals */}
         <Text style={{ fontWeight: 'bold', fontSize: 16, color: colors.black, marginBottom: 8 }}>
@@ -578,25 +459,6 @@ export default function MealPlanBuilderScreen() {
               "We'll create your personalized meal plan and save your preferences. You'll then be taken to your home screen where you can explore meals tailored to your dietary needs."
             }
           </Text>
-        </View>
-        
-        {/* Backend Connection Status */}
-        <View style={{ marginTop: 12, padding: 12, backgroundColor: backendStatus.includes('✅') ? '#E8F5E8' : backendStatus.includes('❌') ? '#FFE8E8' : '#F0F0F0', borderRadius: 8 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Ionicons 
-              name={backendStatus.includes('✅') ? "checkmark-circle" : backendStatus.includes('❌') ? "alert-circle" : "cloud"} 
-              size={16} 
-              color={backendStatus.includes('✅') ? '#4CAF50' : backendStatus.includes('❌') ? '#F44336' : colors.darkGray} 
-              style={{ marginRight: 8 }} 
-            />
-            <Text style={{ 
-              color: backendStatus.includes('✅') ? '#4CAF50' : backendStatus.includes('❌') ? '#F44336' : colors.darkGray, 
-              fontSize: 12,
-              fontWeight: '500'
-            }}>
-              Backend: {backendStatus}
-            </Text>
-          </View>
         </View>
       </ScrollView>
     </SafeAreaView>

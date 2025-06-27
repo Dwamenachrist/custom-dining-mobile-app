@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, ScrollView, TouchableOpacity, StatusBar, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, Image, ScrollView, TouchableOpacity, StatusBar, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getHybridMealById } from '../../services/hybridMealService';
 import { useCart } from '../../cart-context';
 import { CartToast } from '../../components/CartToast';
+import { colors } from '../../theme/colors';
+import MealPlanService from '../../services/mealPlanService';
 
 // Interface for displaying meal details
 interface MealDetail {
@@ -121,6 +123,30 @@ export default function MealDetailScreen() {
     }
   };
 
+  const handleAddToPlan = async () => {
+    if (meal) {
+      try {
+        const result = await MealPlanService.addMealToPlan({
+          id: meal.id,
+          name: meal.name,
+          description: meal.description,
+          image: meal.image,
+          tags: meal.dietaryTags,
+          calories: meal.nutritionalInfo.calories.toString(),
+          price: meal.price,
+          restaurant: meal.restaurant
+        });
+        if (result.success) {
+          Alert.alert('Success', result.message || 'Meal added to plan!');
+        } else {
+          Alert.alert('Error', result.message || 'Failed to add meal to plan.');
+        }
+      } catch (error) {
+        Alert.alert('Error', 'Failed to add meal to plan.');
+      }
+    }
+  };
+
   if (loading) {
     return (
       <View className="flex-1 bg-[#f7f5f0] justify-center items-center">
@@ -172,16 +198,18 @@ export default function MealDetailScreen() {
         <View className="w-8" />
       </View>
 
-      {/* Fixed Content - Image, Title, Description, Tags, Price */}
-      <View className="px-5">
+      {/* Responsive Scrollable Content */}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         {/* Meal Image Container */}
         <View 
           className="mb-6 overflow-hidden items-center justify-center"
           style={{
-            width: 375,
+            width: '100%',
             height: 260,
             borderRadius: 16,
-            backgroundColor: '#758F76'
+            backgroundColor: '#758F76',
+            alignSelf: 'center',
+            marginBottom: 24
           }}
         >
           <Image 
@@ -200,83 +228,83 @@ export default function MealDetailScreen() {
           <Text className="text-xl font-bold" style={{ color: '#2f7d52' }}>
             {meal.name.split(' ')[0]}
           </Text>
-          {meal.name.split(' ').length > 1 && (
-            <Text className="text-xl font-bold text-gray-900 ml-1">
-              {meal.name.split(' ').slice(1).join(' ')}
+          <Text className="text-xl font-semibold text-gray-900 ml-1">
+            {meal.name.replace(meal.name.split(' ')[0], '')}
             </Text>
-          )}
         </View>
-        <Text className="text-sm text-gray-600 mb-4">{meal.restaurant}</Text>
+        <Text className="text-base font-semibold text-gray-700 mb-1">
+          {meal.restaurant}
+        </Text>
         
         {/* Description */}
-        <Text className="text-sm font-semibold text-gray-900 mb-2">Description</Text>
-        <Text className="text-sm text-gray-600 leading-5 mb-6">{meal.description}</Text>
+        <Text className="text-base font-bold text-gray-900 mt-2 mb-1">Description</Text>
+        <Text className="text-base text-gray-700 mb-3">
+          {meal.description}
+        </Text>
         
         {/* Tags */}
-        <View className="flex-row flex-wrap gap-2 mb-6">
-          {meal.dietaryTags.map((tag, index) => (
-            <View key={index} className="bg-green-100 px-3 py-1 rounded-full">
-              <Text className="text-green-700 text-xs font-medium">{tag}</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          {meal.dietaryTags && meal.dietaryTags.map((tag) => (
+            <View key={tag} style={{ backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 4, marginRight: 8, marginBottom: 8 }}>
+              <Text style={{ color: 'white', fontWeight: '600', fontSize: 13 }}>{tag}</Text>
             </View>
           ))}
         </View>
 
         {/* Price and Availability */}
-        <View className="flex-row items-center justify-between mb-4">
-          <Text className="text-lg font-bold text-gray-900">₦{meal.price.toLocaleString()}</Text>
-          <Text className="text-sm text-green-600 font-medium">
+        <View className="flex-row items-center justify-between mb-2">
+          <Text className="text-2xl font-bold text-gray-900 mr-2">
+            #{meal.price.toLocaleString()}
+          </Text>
+          <Text style={{ color: colors.primary, fontWeight: '600', fontSize: 14, marginLeft: 8 }}>
             {meal.available ? 'Available' : 'Unavailable'}
           </Text>
         </View>
 
-        {/* Nutrition Info Header */}
-        <Text className="text-sm font-semibold text-gray-900 mb-3">Nutrition info</Text>
-      </View>
-
-      {/* Scrollable Nutrition Info Section */}
-      <ScrollView 
-        className="flex-1 px-5" 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 20 }}
-      >
-        <View className="bg-white rounded-xl p-4">
-          <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
-            <Text className="text-sm text-gray-600">Calories</Text>
-            <Text className="text-sm text-gray-900 font-medium">{meal.nutritionalInfo.calories} kcal</Text>
+        {/* Nutrition Info */}
+        <Text className="text-lg font-bold text-gray-900 mt-4 mb-2">Nutrition Info</Text>
+        <View style={{ backgroundColor: 'white', borderRadius: 12, padding: 16, marginBottom: 18 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+            <Text style={{ color: '#000000', fontWeight: '600' }}>Calories</Text>
+            <Text style={{ color: '#000000' }}>{meal.nutritionalInfo.calories} kcal</Text>
           </View>
-          <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
-            <Text className="text-sm text-gray-600">Total Carbohydrates</Text>
-            <Text className="text-sm text-gray-900 font-medium">{meal.nutritionalInfo.carbs} g</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+            <Text style={{ color: '#000000', fontWeight: '600' }}>Total Carbohydrates</Text>
+            <Text style={{ color: '#000000' }}>{meal.nutritionalInfo.carbs} g</Text>
           </View>
-          <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
-            <Text className="text-sm text-gray-600">Protein</Text>
-            <Text className="text-sm text-gray-900 font-medium">{meal.nutritionalInfo.protein} g</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+            <Text style={{ color: '#000000', fontWeight: '600' }}>Protein</Text>
+            <Text style={{ color: '#000000' }}>{meal.nutritionalInfo.protein} g</Text>
           </View>
-          <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
-            <Text className="text-sm text-gray-600">Fiber</Text>
-            <Text className="text-sm text-gray-900 font-medium">{meal.nutritionalInfo.fiber} g</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+            <Text style={{ color: '#000000', fontWeight: '600' }}>Fiber</Text>
+            <Text style={{ color: '#000000' }}>{meal.nutritionalInfo.fiber} g</Text>
           </View>
-          <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
-            <Text className="text-sm text-gray-600">Fats</Text>
-            <Text className="text-sm text-gray-900 font-medium">{meal.nutritionalInfo.fat} g</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+            <Text style={{ color: '#000000', fontWeight: '600' }}>Fats</Text>
+            <Text style={{ color: '#000000' }}>{meal.nutritionalInfo.fat} g</Text>
           </View>
-          <View className="flex-row justify-between items-center py-2">
-            <Text className="text-sm text-gray-600">Iron</Text>
-            <Text className="text-sm text-gray-900 font-medium">{meal.nutritionalInfo.iron} mg</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text style={{ color: '#000000', fontWeight: '600' }}>Potassium</Text>
+            <Text style={{ color: '#000000' }}>{meal.nutritionalInfo.iron} mg</Text>
             </View>
         </View>
       </ScrollView>
 
-      {/* Fixed Action Buttons at Bottom */}
-      <View className="px-5 pb-6 pt-4 bg-[#f7f5f0]">
-        <View className="flex-row gap-3">
+      {/* Fixed Bottom Buttons */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 24, paddingTop: 8, backgroundColor: '#f7f5f0', position: 'absolute', left: 0, right: 0, bottom: 0 }}>
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginRight: 10 }}
+          onPress={handleAddToPlan}
+        >
+          <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>Add to Plan</Text>
+        </TouchableOpacity>
           <TouchableOpacity 
+          style={{ flex: 1, backgroundColor: '#ffca28', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginLeft: 10 }}
             onPress={handleAddToCart}
-            className="flex-1 bg-green-600 py-4 rounded-xl items-center"
           >
-            <Text className="text-white font-semibold text-sm">Add to Cart</Text>
+          <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>Order Now</Text>
           </TouchableOpacity>
-        </View>
       </View>
     </SafeAreaView>
   );

@@ -182,4 +182,3 @@ const styles = StyleSheet.create({
     color: '#2f7d52', // New darker green for tagline on light theme
   },
 });
-

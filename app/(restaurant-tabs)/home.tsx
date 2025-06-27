@@ -7,6 +7,7 @@ import { colors } from '../../theme/colors';
 import { useAuth } from '../../auth-context';
 import api from '../../services/api';
 import { getAssetFromMapping } from '../../services/assetMapping';
+import { useNotifications } from '../../notification-context';
 
 interface DashboardStats {
   todayOrders: number;
@@ -27,6 +28,7 @@ interface MealItem {
 export default function RestaurantHomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { unreadCount } = useNotifications();
   const [meals, setMeals] = useState<MealItem[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
     todayOrders: 0,
@@ -53,7 +55,11 @@ export default function RestaurantHomeScreen() {
       // Load meals
       const mealsResponse = await api.get(`/meals/restaurant/${restaurantId}`);
       
-      if (mealsResponse.success && mealsResponse.data) {
+      if (
+        mealsResponse.success &&
+        Array.isArray(mealsResponse.data) &&
+        mealsResponse.data.length > 0
+      ) {
         const mealData = mealsResponse.data.slice(0, 3).map((meal: any) => ({
           id: meal._id || meal.id,
           name: meal.name,
@@ -203,8 +209,30 @@ export default function RestaurantHomeScreen() {
             Dashboard
           </Text>
           
-          <TouchableOpacity onPress={() => router.push('/restaurant-notifications')}>
+          <TouchableOpacity onPress={() => router.push('/restaurant-notifications')} style={{ position: 'relative' }}>
             <Ionicons name="notifications-outline" size={24} color={colors.black} />
+            {unreadCount > 0 && (
+              <View style={{
+                position: 'absolute',
+                top: -5,
+                right: -5,
+                backgroundColor: '#ef4444',
+                borderRadius: 10,
+                minWidth: 18,
+                height: 18,
+                justifyContent: 'center',
+                alignItems: 'center',
+                paddingHorizontal: 4,
+              }}>
+                <Text style={{
+                  color: '#ffffff',
+                  fontSize: 10,
+                  fontWeight: 'bold',
+                }}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 

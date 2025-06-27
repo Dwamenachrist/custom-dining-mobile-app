@@ -73,7 +73,7 @@ export default function RestaurantSearchScreen() {
       const mealsResponse = await api.get(`/meals/restaurant/${restaurantId}`);
       
       if (mealsResponse.success && mealsResponse.data) {
-        const convertedMeals = mealsResponse.data.map((meal: any) => ({
+        const convertedMeals = (mealsResponse.data as any[]).map((meal: any) => ({
           id: meal._id || meal.id,
           type: 'meal' as const,
           name: meal.name,

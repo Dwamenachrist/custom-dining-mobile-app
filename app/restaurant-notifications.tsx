@@ -1,71 +1,92 @@
 import React, { useState } from 'react';
-import { View, Text, SafeAreaView, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
+import { View, Text, SafeAreaView, TouchableOpacity, ScrollView, StatusBar, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useNotifications } from '../notification-context';
+import { NotificationData } from '../services/notificationService';
 
-type NotificationType = 'All' | 'Orders' | 'Performance' | 'Reminders';
+type NotificationType = 'All' | 'order' | 'promotion' | 'reminder' | 'meal_plan' | 'system';
 
-interface Notification {
-  id: string;
-  type: NotificationType;
-  title: string;
-  message: string;
-  timeAgo: string;
-  icon: string;
-}
-
-const TABS: NotificationType[] = ['All', 'Orders', 'Performance', 'Reminders'];
-
-const RESTAURANT_NOTIFICATIONS: Notification[] = [
-  {
-    id: '1',
-    type: 'Orders',
-    title: 'Order #1054 Confirmed',
-    message: 'Your customer\'s meal order has been successfully placed',
-    timeAgo: '1m ago',
-    icon: 'checkmark-circle'
-  },
-  {
-    id: '2',
-    type: 'Performance',
-    title: 'New Promotion Live',
-    message: '"Buy 2, Get 1 free smoothie" is now active on your menu .',
-    timeAgo: '10m ago',
-    icon: 'gift'
-  },
-  {
-    id: '3',
-    type: 'Performance',
-    title: 'Customer Feedback Received',
-    message: 'Loved the grilled fish! 4.8 rating from a recent customers',
-    timeAgo: '30m ago',
-    icon: 'chatbubble'
-  },
-  {
-    id: '4',
-    type: 'Reminders',
-    title: 'Reminder: Update Menu',
-    message: 'Don\'t forget to update your weekend specials.',
-    timeAgo: '2h ago',
-    icon: 'time'
-  },
-  {
-    id: '5',
-    type: 'Performance',
-    title: 'Daily Sales Report',
-    message: 'Review todays performance, insights and key .',
-    timeAgo: '2h ago',
-    icon: 'trending-up'
-  },
-];
+const TABS: NotificationType[] = ['All', 'order', 'promotion', 'reminder', 'meal_plan', 'system'];
 
 export default function RestaurantNotificationsScreen() {
   const router = useRouter();
   const [selectedTab, setSelectedTab] = useState<NotificationType>('All');
+  const [refreshing, setRefreshing] = useState(false);
+  
+  const { 
+    notifications, 
+    unreadCount, 
+    loading, 
+    markAsRead, 
+    deleteNotification, 
+    markAllAsRead, 
+    clearAllNotifications,
+    refreshNotifications,
+    sendSampleNotifications 
+  } = useNotifications();
 
+  // Filter notifications based on selected tab
   const filteredNotifications = selectedTab === 'All' 
-    ? RESTAURANT_NOTIFICATIONS
-    : RESTAURANT_NOTIFICATIONS.filter(n => n.type === selectedTab);
+    ? notifications
+    : notifications.filter(n => n.type === selectedTab);
+
+  // Handle refresh
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refreshNotifications();
+    setRefreshing(false);
+  };
+
+  // Handle notification tap
+  const handleNotificationTap = async (notification: NotificationData) => {
+    if (!notification.read) {
+      await markAsRead(notification.id);
+    }
+    
+    // Handle navigation if action is present
+    if (notification.action?.type === 'navigate') {
+      const { screen, ...params } = notification.action.data;
+      router.push(screen as any);
+    }
+  };
+
+  // Handle delete notification
+  const handleDeleteNotification = async (notificationId: string) => {
+    await deleteNotification(notificationId);
+  };
+
+  // Get icon name based on notification type
+  const getIconName = (type: string): string => {
+    switch (type) {
+      case 'order':
+        return 'checkmark-circle';
+      case 'promotion':
+        return 'gift';
+      case 'reminder':
+        return 'time';
+      case 'meal_plan':
+        return 'restaurant';
+      case 'system':
+        return 'notifications';
+      default:
+        return 'information-circle';
+    }
+  };
+
+  // Format timestamp
+  const formatTimeAgo = (timestamp: number): string => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / (1000 * 60));
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return `${days}d ago`;
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-gray-100" style={{ marginTop: 60 }}>
@@ -77,7 +98,14 @@ export default function RestaurantNotificationsScreen() {
           <Ionicons name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
         <Text className="text-xl font-bold text-black">Notifications</Text>
-        <View className="w-6" />
+        <View className="flex-row items-center gap-4">
+          <TouchableOpacity onPress={markAllAsRead}>
+            <Ionicons name="checkmark-done" size={24} color="#10b981" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={clearAllNotifications}>
+            <Ionicons name="trash" size={24} color="#ef4444" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Tabs */}
@@ -116,17 +144,31 @@ export default function RestaurantNotificationsScreen() {
       </View>
 
       {/* Notifications List */}
-      <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} showsVerticalScrollIndicator={false}>
-        {filteredNotifications.map((notification) => (
-          <View 
+      <ScrollView 
+        style={{ flex: 1, paddingHorizontal: 24 }} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {loading ? (
+          <View className="flex-1 items-center justify-center py-20">
+            <Text className="text-gray-500 text-base">Loading notifications...</Text>
+          </View>
+        ) : filteredNotifications.length > 0 ? (
+          filteredNotifications.map((notification) => (
+            <TouchableOpacity
             key={notification.id} 
+              onPress={() => handleNotificationTap(notification)}
             style={{
-              backgroundColor: '#A7D2A5',
+                backgroundColor: notification.read ? '#f8f9fa' : '#A7D2A5',
               borderRadius: 16,
               padding: 16,
               marginBottom: 16,
               flexDirection: 'row',
-              alignItems: 'flex-start'
+                alignItems: 'flex-start',
+                borderLeftWidth: 4,
+                borderLeftColor: notification.read ? '#e9ecef' : '#7BC97A',
             }}
           >
             {/* Icon */}
@@ -134,7 +176,7 @@ export default function RestaurantNotificationsScreen() {
               style={{
                 width: 48,
                 height: 48,
-                backgroundColor: '#7BC97A',
+                  backgroundColor: notification.read ? '#e9ecef' : '#7BC97A',
                 borderRadius: 24,
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -143,9 +185,9 @@ export default function RestaurantNotificationsScreen() {
               }}
             >
               <Ionicons 
-                name={notification.icon as any} 
+                  name={getIconName(notification.type) as any} 
                 size={24} 
-                color="#ffffff" 
+                  color={notification.read ? '#6c757d' : '#ffffff'} 
               />
             </View>
             
@@ -154,8 +196,8 @@ export default function RestaurantNotificationsScreen() {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                 <Text style={{
                   fontSize: 16,
-                  fontWeight: '600',
-                  color: '#1f2937',
+                    fontWeight: notification.read ? '500' : '600',
+                    color: notification.read ? '#6c757d' : '#1f2937',
                   flex: 1,
                   paddingRight: 8
                 }}>
@@ -163,25 +205,46 @@ export default function RestaurantNotificationsScreen() {
                 </Text>
                 <Text style={{
                   fontSize: 12,
-                  color: '#6b7280'
+                    color: notification.read ? '#adb5bd' : '#6b7280'
                 }}>
-                  {notification.timeAgo}
+                    {formatTimeAgo(notification.timestamp)}
                 </Text>
               </View>
               <Text style={{
                 fontSize: 14,
-                color: '#374151',
+                  color: notification.read ? '#adb5bd' : '#374151',
                 lineHeight: 20
               }}>
                 {notification.message}
               </Text>
             </View>
-          </View>
-        ))}
 
-        {filteredNotifications.length === 0 && (
+              {/* Delete Button */}
+              <TouchableOpacity 
+                onPress={() => handleDeleteNotification(notification.id)}
+                style={{ padding: 4, marginLeft: 8 }}
+              >
+                <Ionicons name="close" size={18} color="#6b7280" />
+              </TouchableOpacity>
+            </TouchableOpacity>
+          ))
+        ) : (
           <View className="flex-1 items-center justify-center py-20">
-            <Text className="text-gray-500 text-base">No notifications</Text>
+            <Ionicons name="notifications-off" size={64} color="#d1d5db" style={{ marginBottom: 16 }} />
+            <Text className="text-gray-500 text-base mb-4">No notifications</Text>
+            <TouchableOpacity 
+              onPress={sendSampleNotifications}
+              style={{
+                backgroundColor: '#10b981',
+                paddingHorizontal: 20,
+                paddingVertical: 10,
+                borderRadius: 8
+              }}
+            >
+              <Text style={{ color: '#ffffff', fontWeight: '600' }}>
+                Send Sample Notifications
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
         

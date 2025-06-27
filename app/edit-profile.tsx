@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, Image, StyleSheet, TouchableOpacity, Modal, Pressable, Alert } from 'react-native';
+import { View, Text, TextInput, Image, StyleSheet, TouchableOpacity, Modal, Pressable, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,9 +11,12 @@ const profileImage = require('../assets/profile.png');
 const HEALTH_GOALS = ['Weight Loss', 'Muscle Gain', 'Maintenance'];
 
 const DIET_PREFS = [
+  { key: 'vegetarian', label: 'Vegetarian' },
+  { key: 'dairyFree', label: 'Dairy-free' },
+  { key: 'sugarFree', label: 'Sugar free' },
+  { key: 'lowCarb', label: 'Low-carb' },
   { key: 'vegan', label: 'Vegan' },
-  { key: 'lowSugar', label: 'Low - Sugar' },
-  { key: 'lowCarb', label: 'Low - Carb' },
+  { key: 'glutenFree', label: 'Gluten-free' },
 ];
 
 export default function EditProfile() {
@@ -164,7 +167,7 @@ export default function EditProfile() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.form}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.form, { paddingBottom: 40 }]} keyboardShouldPersistTaps="handled">
         <TextInput
           ref={nameInputRef}
           style={styles.input}
@@ -234,7 +237,7 @@ export default function EditProfile() {
         <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
           <Text style={styles.saveButtonText}>Save</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }

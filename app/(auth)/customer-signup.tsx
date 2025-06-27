@@ -77,6 +77,7 @@ export default function SignupScreen() {
         // Store user info for future use
         await AsyncStorage.setItem('userEmail', email);
         await AsyncStorage.setItem('userName', firstName + ' ' + lastName);
+        await AsyncStorage.setItem('firstName', firstName);
         
         // Show email verification toast
         setShowEmailToast(true);
@@ -86,11 +87,18 @@ export default function SignupScreen() {
           router.push('/(auth)/customer-login');
         }, 6500); // Slightly longer than toast duration
       } else {
-        setError(response.message || 'Signup failed. Please try again.');
+        // ALWAYS show backend error message when API call fails
+        console.log('Backend error response:', response);
+        setError(response.message || response.error || 'Customer registration failed. Please try again.');
       }
-    } catch (error) {
-      console.error('Signup error:', error);
-      setError('An unexpected error occurred. Please try again.');
+    } catch (error: any) {
+      console.error('Customer signup error:', error);
+      // Show backend error if available, otherwise generic message
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          error.message || 
+                          'An unexpected error occurred. Please try again.';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -99,12 +107,12 @@ export default function SignupScreen() {
 
   const handleTermsPress = () => {
     console.log('Terms of Use pressed');
-    router.push('/(auth)/customer-terms' as any);
+    router.push('/customer-terms' as any);
   };
 
   const handlePrivacyPress = () => {
     console.log('Privacy Policy pressed');
-    router.push('/(auth)/customer-terms' as any);
+    router.push('/customer-terms' as any);
   };
 
   return (
@@ -255,7 +263,7 @@ export default function SignupScreen() {
               title={isLoading ? "Creating Account..." : "Create Account"}
               variant="primary"
               onPress={handleSignup}
-              disabled={isLoading}
+              disabled={isLoading || !firstName || !lastName || !phoneNumber || !email || !password || !confirmPassword || !acceptTerms}
             />
             {isLoading && (
               <View className="flex-row justify-center mt-2">

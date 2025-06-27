@@ -63,14 +63,12 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "c182f76b-528e-4133-b8cf-6b5ea4fa0e36"
+        "projectId": "50a0e880-92ca-4a35-92c1-b6b456a15826"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    "updates": {
-      "url": "https://u.expo.dev/c182f76b-528e-4133-b8cf-6b5ea4fa0e36"
-    }
+    "owner": "dwamenachrist"
   }
 }

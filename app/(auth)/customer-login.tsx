@@ -212,7 +212,7 @@ export default function LoginScreen() {
 
           {/* Form Inputs */}
           <TextInput
-            placeholder="Email/Phone Number"
+            placeholder="Email"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"

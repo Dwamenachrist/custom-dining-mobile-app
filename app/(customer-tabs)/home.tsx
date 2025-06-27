@@ -6,13 +6,14 @@ import GreetingHeader from '../../components/Greeting';
 import Category from '../../components/Categories';
 import RestaurantCard from '../../components/RestaurantCards';
 import MealCard from '../../components/MealCards';
-import { EmailVerificationBanner } from '../../components/EmailVerificationBanner';
 
 import { useAuth } from '../../auth-context';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getUserMeals, DietaryPreferences, Meal as BackendMeal, Restaurant as BackendRestaurant } from '../../services/api';
+import { DietaryPreferences, Meal as BackendMeal, Restaurant as BackendRestaurant } from '../../services/api';
 import { getHybridMeals, getHybridRestaurants } from '../../services/hybridMealService';
-import AuthService from '../../services/authService';
+import MealFilterService from '../../services/mealFilterService';
+import MealPlanService from '../../services/mealPlanService';
+import { NotificationToast } from '../../components/NotificationToast';
 
 // Types for frontend components
 interface Meal {
@@ -82,157 +83,105 @@ export default function HomeScreen() {
   const [userImage, setUserImage] = useState<string | null>(null);
   const [dietaryPrefs, setDietaryPrefs] = useState<DietaryPreferences | null>(null);
   const [isPersonalized, setIsPersonalized] = useState(false);
-
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'cart'>('success');
 
   useEffect(() => {
-    loadData();
-    loadUserProfile();
+    // Load both user profile and recommended meals on mount
+    loadUserProfileAndMeals();
   }, []);
 
-  // Add focus effect to reload profile when returning to home screen
+  // Add focus effect to reload profile and recommended meals when returning to home screen
   useFocusEffect(
     useCallback(() => {
-      loadUserProfile();
+      loadUserProfileAndMeals();
     }, [])
   );
 
-  const loadUserProfile = async () => {
+  // Helper to fetch a few meals from a category
+  const fetchCategoryMeals = async (allMeals: BackendMeal[], category: string, count: number) => {
+    const filtered = await MealFilterService.filterMealsForCategory(allMeals, category, true);
+    return filtered.slice(0, count);
+  };
+
+  const loadUserProfileAndMeals = async () => {
     try {
-      // Check multiple possible keys for the user name
-      const profileName = await AsyncStorage.getItem('profileName');
+      // Load user profile info
       const firstName = await AsyncStorage.getItem('firstName');
-      const userName = await AsyncStorage.getItem('userName');
-      const savedName = profileName || firstName || userName || 'Guest';
-      
-      // Use the correct key for profile image
+      const savedName = firstName || 'Guest';
       const image = await AsyncStorage.getItem('profileImage');
       
       setUserName(savedName);
       if (image) setUserImage(image);
 
-      // Load dietary preferences from meal plan builder
+      // Load dietary preferences
       const dietaryData = await AsyncStorage.getItem('dietaryPreferences');
+      let parsedPrefs = null;
       if (dietaryData) {
-        const parsed = JSON.parse(dietaryData);
-        setDietaryPrefs(parsed);
-        console.log('🍎 Loaded dietary preferences for personalization:', parsed);
-      }
-    } catch (error) {
-      console.error('Error loading user profile:', error);
-    }
-  };
-
-  // Filter meals based on dietary preferences
-  const filterMealsByPreferences = (meals: BackendMeal[]): BackendMeal[] => {
-    if (!dietaryPrefs || (!dietaryPrefs.dietaryRestrictions.length && !dietaryPrefs.preferredMealTags.length)) {
-      return meals;
+        parsedPrefs = JSON.parse(dietaryData);
+        setDietaryPrefs(parsedPrefs);
+        console.log('🍎 Loaded dietary preferences for personalization:', parsedPrefs);
+      } else {
+        setDietaryPrefs(null);
     }
 
-    const filtered = meals.filter(meal => {
-      // Check if meal matches dietary restrictions
-      const matchesRestrictions = dietaryPrefs.dietaryRestrictions.length === 0 || 
-        dietaryPrefs.dietaryRestrictions.some(restriction => 
-          meal.dietaryTags.some(tag => 
-            tag.toLowerCase().includes(restriction.toLowerCase()) ||
-            restriction.toLowerCase().includes(tag.toLowerCase())
-          )
-        );
-
-      // Check if meal matches preferred tags
-      const matchesPreferredTags = dietaryPrefs.preferredMealTags.length === 0 ||
-        dietaryPrefs.preferredMealTags.some(preferred => 
-          meal.dietaryTags.some(tag => 
-            tag.toLowerCase().includes(preferred.toLowerCase()) ||
-            preferred.toLowerCase().includes(tag.toLowerCase())
-          )
-        );
-
-      return matchesRestrictions || matchesPreferredTags;
-    });
-
-    console.log(`🎯 Filtered ${meals.length} meals to ${filtered.length} based on preferences`);
-    setIsPersonalized(filtered.length !== meals.length && filtered.length > 0);
-    
-    return filtered.length > 0 ? filtered : meals;
-  };
-
-  // Load meals from hybrid service (backend + comprehensive local)
-  const loadPersonalizedMeals = async (): Promise<Meal[]> => {
-    try {
-      // First try personalized meals if user has auth token
-      const authToken = await AsyncStorage.getItem('auth_token');
-      if (authToken && dietaryPrefs) {
-        console.log('🌐 Attempting to load personalized meals from backend...');
-        const response = await getUserMeals();
-        
-        if (response.success && response.data && response.data.length > 0) {
-          console.log('✅ Loaded personalized meals from backend!');
-          return response.data.slice(0, 6).map((meal, index) => convertBackendMealToMeal(meal, index));
-        }
-      }
-
-      // Fall back to hybrid meals (backend + comprehensive local)
-      console.log('🎯 Loading hybrid meals (backend + local)...');
-      const response = await getHybridMeals();
-      
-      console.log('🔍 DEBUG: Full hybrid meals response:', JSON.stringify(response, null, 2));
-      
-      if (response.success && response.data && response.data.length > 0) {
-        console.log('✅ Loaded hybrid meals successfully!');
-        console.log('🔍 DEBUG: First hybrid meal:', JSON.stringify(response.data[0], null, 2));
-        
-        // Filter meals based on dietary preferences
-        const filteredMeals = filterMealsByPreferences(response.data);
-        const convertedMeals = filteredMeals.slice(0, 6).map((meal, index) => convertBackendMealToMeal(meal, index));
-        
-        console.log('🔍 DEBUG: First converted hybrid meal:', JSON.stringify(convertedMeals[0], null, 2));
-        
-        return convertedMeals;
-      }
-
-      // If no hybrid data, return empty array
-      console.log('⚠️ No meals available from hybrid service');
-      return [];
-    } catch (error) {
-      console.error('❌ Error loading meals from hybrid service:', error);
-      return [];
-    }
-  };
-
-  // Load restaurants from hybrid service
-  const loadTopRestaurants = async (): Promise<Restaurant[]> => {
-    try {
-      console.log('🏪 Loading restaurants from hybrid service...');
-      const response = await getHybridRestaurants();
-      
-      if (response.success && response.data && response.data.length > 0) {
-        console.log('✅ Loaded restaurants from hybrid service!');
-        return response.data.slice(0, 5).map((restaurant, index) => convertHybridRestaurantToRestaurant(restaurant, index));
-      }
-
-      console.log('⚠️ No restaurants available from hybrid service');
-      return [];
-    } catch (error) {
-      console.error('❌ Error loading restaurants from hybrid service:', error);
-      return [];
-    }
-  };
-
-  const loadData = async () => {
-    try {
       setIsLoading(true);
-      
-      const [meals, restaurants] = await Promise.all([
-        loadPersonalizedMeals(),
-        loadTopRestaurants()
+      const [mealsResponse, restaurantsResponse] = await Promise.all([
+        getHybridMeals(),
+        getHybridRestaurants()
       ]);
-      
-      setRecommendedMeals(meals);
-      setTopRestaurants(restaurants);
-      
-      console.log(`📊 Loaded ${meals.length} meals and ${restaurants.length} restaurants`);
+      // Meals: fetch a few from each category and combine
+      if (mealsResponse.success && mealsResponse.data && mealsResponse.data.length > 0) {
+        const breakfastMeals = await fetchCategoryMeals(mealsResponse.data, 'breakfast', 2);
+        const lunchMeals = await fetchCategoryMeals(mealsResponse.data, 'lunch', 2);
+        const dinnerMeals = await fetchCategoryMeals(mealsResponse.data, 'dinner', 2);
+        const snacksMeals = await fetchCategoryMeals(mealsResponse.data, 'snacks', 2);
+        const allMeals = [...breakfastMeals, ...lunchMeals, ...dinnerMeals, ...snacksMeals];
+        // Remove duplicates by meal id
+        const uniqueMealsMap = new Map();
+        allMeals.forEach(meal => {
+          if (!uniqueMealsMap.has(meal.id)) {
+            uniqueMealsMap.set(meal.id, meal);
+          }
+        });
+        const combinedMeals = Array.from(uniqueMealsMap.values()).slice(0, 6);
+        // Map to Meal[]
+        const convertedMeals = combinedMeals.map((meal, index) => ({
+          id: meal.id,
+          name: meal.name,
+          description: meal.description,
+          image: meal.image,
+          price: meal.price,
+          calories: typeof meal.calories === 'string' ? parseInt(meal.calories) || 0 : meal.calories,
+          tags: meal.tags,
+          restaurant: {
+            id: meal.restaurant || 'unknown',
+            name: meal.restaurant || 'Restaurant Name',
+          },
+        }));
+        setRecommendedMeals(convertedMeals);
+        setIsPersonalized(false); // No longer using custom personalized logic
+      } else {
+        setRecommendedMeals([]);
+        setIsPersonalized(false);
+      }
+      // Restaurants (unchanged)
+      if (restaurantsResponse.success && restaurantsResponse.data && restaurantsResponse.data.length > 0 && mealsResponse.success && mealsResponse.data) {
+        let filteredRestaurants = restaurantsResponse.data;
+        if (parsedPrefs) {
+          filteredRestaurants = await MealFilterService.filterRestaurantsByMeals(restaurantsResponse.data, mealsResponse.data);
+        }
+        const convertedRestaurants = filteredRestaurants.slice(0, 5).map((restaurant, index) => convertHybridRestaurantToRestaurant(restaurant, index));
+        setTopRestaurants(convertedRestaurants);
+      } else {
+        setTopRestaurants([]);
+      }
     } catch (error) {
-      console.error('❌ Error loading data:', error);
+      console.error('Error loading user profile or meals:', error);
+      setRecommendedMeals([]);
+      setTopRestaurants([]);
+      setIsPersonalized(false);
     } finally {
       setIsLoading(false);
     }
@@ -271,42 +220,37 @@ export default function HomeScreen() {
     });
   };
 
-  const handleAddToPlan = (meal: Meal) => {
+  const handleAddToPlan = async (meal: Meal) => {
     if (!isLoggedIn) {
       router.push('/(auth)/customer-login');
       return;
     }
-    // TODO: Implement add to meal plan functionality
-    console.log('Adding to plan:', meal.name);
-  };
-
-  const handleResendEmail = async () => {
     try {
-      console.log('📧 Resending verification email...');
-      
-      // Show loading feedback
-      Alert.alert('📧 Sending...', 'Resending verification email...');
-      
-      // Call AuthService to resend verification email
-      const response = await AuthService.resendVerificationEmail();
-      
-      if (response.success) {
-        Alert.alert(
-          '✅ Email Sent!', 
-          'We\'ve sent a new verification link to your email. Please check your inbox.'
-        );
+      // Convert meal to match the service interface
+      const mealForPlan = {
+        id: meal.id,
+        name: meal.name,
+        description: meal.description,
+        image: meal.image,
+        tags: meal.tags,
+        calories: meal.calories.toString(),
+        price: meal.price,
+        restaurant: meal.restaurant.name // Convert restaurant object to string
+      };
+      const result = await MealPlanService.addMealToPlan(mealForPlan);
+      if (result.success) {
+        setToastVisible(true);
+        setToastMessage(result.message);
+        setToastType('success');
       } else {
-        Alert.alert(
-          '❌ Failed to Send', 
-          response.message || 'Failed to resend verification email. Please try again.'
-        );
+        setToastVisible(true);
+        setToastMessage(result.message);
+        setToastType('error');
       }
     } catch (error) {
-      console.error('❌ Resend email error:', error);
-      Alert.alert(
-        '❌ Error', 
-        'An unexpected error occurred. Please try again later.'
-      );
+      setToastVisible(true);
+      setToastMessage('Failed to add meal to plan. Please try again.');
+      setToastType('error');
     }
   };
 
@@ -314,10 +258,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#f7f5f0" />
     <GreetingHeader name={userName} image={userImage} />
-      
-      {/* Email Verification Banner */}
-      <EmailVerificationBanner onResendEmail={handleResendEmail} />
-      
+          
       {/* Categories - Outside ScrollView */}
       <View style={styles.categoryWrapper}>
       <Category />
@@ -332,20 +273,8 @@ export default function HomeScreen() {
       <View style={styles.sectionHeader}>
         <View style={{ flex: 1 }}>
         <Text style={styles.sectionTitle}>
-          {dietaryPrefs ? 'Recommended For You' : '🍽️ Popular Meals'}
+          {dietaryPrefs ? 'Recommended For You' : 'Popular Meals'}
         </Text>
-          {isPersonalized && dietaryPrefs && (
-            <Text style={{ fontSize: 12, color: '#10b981', fontWeight: '500', marginTop: 2 }}>
-              Personalized for {dietaryPrefs.healthGoal.replace('_', ' ')} • {dietaryPrefs.dietaryRestrictions.join(', ')}
-            </Text>
-          )}
-          {!dietaryPrefs && (
-            <TouchableOpacity onPress={() => router.push('/meal-plan-builder')} style={{ marginTop: 2 }}>
-              <Text style={{ fontSize: 12, color: '#f59e0b', fontWeight: '500' }}>
-                Complete profile for personalized recommendations
-              </Text>
-            </TouchableOpacity>
-          )}
         </View>
         <TouchableOpacity onPress={() => router.push('/meal/recommended')}>
           <Text style={styles.seeAll}>See All</Text>
@@ -363,11 +292,6 @@ export default function HomeScreen() {
           <Text style={styles.sectionTitle}>
             {dietaryPrefs ? 'Restaurants For You' : 'Top Restaurants'}
           </Text>
-          {!dietaryPrefs && (
-            <Text style={{ fontSize: 12, color: '#6b7280', fontStyle: 'italic', marginTop: 2 }}>
-              Popular choices • Complete profile for personalized options
-            </Text>
-          )}
         </View>
         <TouchableOpacity onPress={() => router.push('/restaurants')}>
           <Text style={styles.seeAll}>See All</Text>
@@ -389,6 +313,12 @@ export default function HomeScreen() {
           </View>
         </View>
     </ScrollView>
+    <NotificationToast
+      visible={toastVisible}
+      message={toastMessage}
+      type={toastType}
+      onHide={() => setToastVisible(false)}
+    />
     </SafeAreaView>
   );
 }

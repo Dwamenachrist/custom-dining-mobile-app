@@ -15,8 +15,8 @@ export default function SignupScreen() {
   const router = useRouter();
 
   // State management for form inputs
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  const [businessName, setBusinessName] = useState('');
+  const [businessAddress, setBusinessAddress] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -55,8 +55,8 @@ export default function SignupScreen() {
     setIsLoading(true);
 
     try {
-      // Validation
-      if (!firstName || !lastName || !phoneNumber || !email || !password || !confirmPassword) {
+      // Frontend validation first (before API call)
+      if (!businessName || !businessAddress || !phoneNumber || !email || !password || !confirmPassword) {
         setError('Please fill in all fields.');
         return;
       }
@@ -76,18 +76,40 @@ export default function SignupScreen() {
         return;
       }
 
-      // Call API service with restaurant registration data
+      if (!certUploaded) {
+        setError('Please upload your certifications.');
+        return;
+      }
+
+      // All validation passed, make API call
+      console.log('🚀 Making restaurant signup API call...');
       const response = await AuthService.registerRestaurant({
-        username: firstName, // Business name as username
+        username: businessName, // Business name as username
         email,
         password,
         phoneNumber: countryCode + phoneNumber,
-        address: lastName, // Business address
+        address: businessAddress, // Business address
         city,
       });
 
+      console.log('📤 Sent to backend:', {
+        username: businessName,
+        email,
+        phoneNumber: countryCode + phoneNumber,
+        address: businessAddress,
+        city,
+        role: 'restaurant' // This is added by the service
+      });
+
+      console.log('📨 Backend response:', {
+        success: response.success,
+        message: response.message,
+        error: response.error,
+        data: response.data
+      });
+
       if (response.success) {
-        console.log('Signup successful:', response.data);
+        console.log('Restaurant signup successful:', response.data);
 
         // Clear any previous errors
         setError('');
@@ -95,16 +117,23 @@ export default function SignupScreen() {
         // Show email verification toast
         setShowEmailToast(true);
         
-        // Navigate to login after toast is dismissed (or after delay)
+        // Navigate to login after toast is dismissed
         setTimeout(() => {
           router.push('/(auth)/restaurant-login');
-        }, 6500); // Slightly longer than toast duration
+        }, 6500);
       } else {
-        setError(response.message || 'Signup failed. Please try again.');
+        // ALWAYS show backend error message when API call fails
+        console.log('Backend error response:', response);
+        setError(response.message || response.error || 'Restaurant registration failed. Please try again.');
       }
-    } catch (error) {
-      console.error('Signup error:', error);
-      setError('An unexpected error occurred. Please try again.');
+    } catch (error: any) {
+      console.error('Restaurant signup error:', error);
+      // Show backend error if available, otherwise generic message
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          error.message || 
+                          'An unexpected error occurred. Please try again.';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -155,10 +184,10 @@ export default function SignupScreen() {
           {/* Form Inputs */}
           <TextInput
             placeholder="Business Name"
-            value={firstName}
-            onChangeText={setFirstName}
+            value={businessName}
+            onChangeText={setBusinessName}
             autoCapitalize="words"
-            variant={error && !firstName ? 'error' : 'default'}
+            variant={error && !businessName ? 'error' : 'default'}
             editable={!isLoading}
           />
 
@@ -201,10 +230,10 @@ export default function SignupScreen() {
 
           <TextInput
             placeholder="Business Address"
-            value={lastName}
-            onChangeText={setLastName}
+            value={businessAddress}
+            onChangeText={setBusinessAddress}
             autoCapitalize="words"
-            variant={error && !lastName ? 'error' : 'default'}
+            variant={error && !businessAddress ? 'error' : 'default'}
             editable={!isLoading}
           />
 
@@ -308,7 +337,7 @@ export default function SignupScreen() {
               title={isLoading ? "Creating Account..." : "Create Account"}
               variant="primary"
               onPress={handleSignup}
-              disabled={isLoading || !certUploaded || !firstName || !lastName || !phoneNumber || !email || !password || !confirmPassword || !acceptTerms}
+              disabled={isLoading || !certUploaded || !businessName || !businessAddress || !phoneNumber || !email || !password || !confirmPassword || !acceptTerms}
             />
             {isLoading && (
               <View className="flex-row justify-center mt-2">

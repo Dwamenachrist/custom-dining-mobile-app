@@ -7,7 +7,11 @@ import { useAuth } from '../auth-context';
 import { getHybridMeals } from '../services/hybridMealService';
 import { useCart } from '../cart-context';
 import MealPlanService from '../services/mealPlanService';
-import MealPlanToast from '../components/MealPlanToast';
+import { NotificationToast } from '../components/NotificationToast';
+import MealFilterService, { FilteredMeal as OriginalFilteredMeal } from '../services/mealFilterService';
+
+type FilteredMeal = OriginalFilteredMeal & { isFavorite?: boolean };
+import { addMealToFavorites, removeMealFromFavorites, getFavoriteMeals } from '../services/api';
 
 interface Meal {
   id: string;
@@ -19,6 +23,7 @@ interface Meal {
   rating: number;
   price: number;
   restaurant?: string;
+  isFavorite?: boolean;
 }
 
 export default function BreakfastScreen() {
@@ -26,61 +31,99 @@ export default function BreakfastScreen() {
   const { isLoggedIn } = useAuth();
   const { addToCart } = useCart();
   const [selectedSort, setSelectedSort] = useState('Most Popular');
-  const [meals, setMeals] = useState<Meal[]>([]);
+  const [meals, setMeals] = useState<FilteredMeal[]>([]);
   const [loading, setLoading] = useState(true);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error' | 'cart'>('success');
+  const [personalizationInfo, setPersonalizationInfo] = useState<{
+    isPersonalized: boolean;
+    summary: string;
+  }>({ isPersonalized: false, summary: '' });
+  const [favoriteMealIds, setFavoriteMealIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadBreakfastMeals();
+    loadPersonalizationInfo();
+    loadFavorites();
   }, []);
+
+  const loadFavorites = async () => {
+    if (!isLoggedIn) return;
+    
+    try {
+      const response = await getFavoriteMeals();
+      if (response.success && response.data) {
+        const favoriteIds = new Set(response.data.map(meal => meal.id));
+        setFavoriteMealIds(favoriteIds);
+      }
+    } catch (error) {
+      console.error('❌ Error loading favorites:', error);
+    }
+  };
+
+  const loadPersonalizationInfo = async () => {
+    const info = await MealFilterService.getPersonalizationInfo();
+    setPersonalizationInfo({
+      isPersonalized: info.isPersonalized,
+      summary: info.summary
+    });
+  };
 
   const loadBreakfastMeals = async () => {
     try {
       setLoading(true);
-      console.log('🌅 Loading breakfast meals from hybrid service...');
+      console.log('🌅 Loading breakfast meals...');
       
       const response = await getHybridMeals();
       
       if (response.success && response.data) {
-        // Filter for breakfast meals and convert to display format
-        const breakfastMeals = response.data
-          .filter(meal => 
-            meal.dietaryTags.some(tag => 
-              tag.toLowerCase().includes('breakfast') || 
-              meal.name.toLowerCase().includes('oats') ||
-              meal.name.toLowerCase().includes('pancakes') ||
-              meal.name.toLowerCase().includes('toast') ||
-              meal.name.toLowerCase().includes('moi moi')
-            )
-          )
-          .map((meal: any) => ({
-            id: meal.id,
-            name: meal.name,
-            description: meal.description,
-            image: meal.image || require('../assets/recommendation1.png'),
-            tags: meal.dietaryTags.slice(0, 2), // Show first 2 tags
-            calories: meal.nutritionalInfo?.calories || '310 Cal Per Serving',
-            rating: 4.5 + Math.random() * 0.5, // Random rating between 4.5-5.0
-            price: parseFloat(meal.price) || 3000,
-            restaurant: meal.restaurant?.name || 'Restaurant'
-          }));
+        // Use the centralized filtering service
+        const filteredMeals = await MealFilterService.filterMealsForCategory(
+          response.data, 
+          'breakfast', 
+          true // Apply dietary preferences filtering
+        );
         
-        // If no breakfast meals found, use fallback meals
-        if (breakfastMeals.length === 0) {
-          setMeals(BREAKFAST_MEALS);
+        if (filteredMeals.length === 0) {
+          // Convert fallback meals to FilteredMeal format
+          const fallbackMeals = BREAKFAST_MEALS.map(meal => ({
+            ...meal,
+            dietaryTags: meal.tags,
+            category: 'breakfast',
+            isFavorite: favoriteMealIds.has(meal.id)
+          }));
+          setMeals(fallbackMeals);
         } else {
-          setMeals(breakfastMeals);
+          // Add favorite status to filtered meals
+          const mealsWithFavorites = filteredMeals.map(meal => ({
+            ...meal,
+            isFavorite: favoriteMealIds.has(meal.id)
+          }));
+          setMeals(mealsWithFavorites);
         }
       } else {
-        setMeals(BREAKFAST_MEALS);
+        // Convert fallback meals to FilteredMeal format
+        const fallbackMeals = BREAKFAST_MEALS.map(meal => ({
+          ...meal,
+          dietaryTags: meal.tags,
+          category: 'breakfast',
+          isFavorite: favoriteMealIds.has(meal.id)
+        }));
+        setMeals(fallbackMeals);
       }
       
       console.log('✅ Breakfast meals loaded!');
     } catch (error) {
       console.error('❌ Error loading breakfast meals:', error);
-      setMeals(BREAKFAST_MEALS);
+      // Convert fallback meals to FilteredMeal format
+      const fallbackMeals = BREAKFAST_MEALS.map(meal => ({
+        ...meal,
+        dietaryTags: meal.tags,
+        category: 'breakfast',
+        isFavorite: favoriteMealIds.has(meal.id)
+      }));
+      setMeals(fallbackMeals);
     } finally {
       setLoading(false);
     }
@@ -148,6 +191,62 @@ export default function BreakfastScreen() {
     setToastType('cart');
     
     console.log('Added to cart:', meal.name);
+  };
+
+  const handleFavoriteToggle = async (meal: Meal) => {
+    if (!isLoggedIn) {
+      router.push('/(auth)/customer-login');
+      return;
+    }
+
+    try {
+      const isFavorite = favoriteMealIds.has(meal.id);
+      
+      if (isFavorite) {
+        // Remove from favorites
+        const response = await removeMealFromFavorites(meal.id);
+        if (response.success) {
+          const newFavorites = new Set(favoriteMealIds);
+          newFavorites.delete(meal.id);
+          setFavoriteMealIds(newFavorites);
+          
+          // Update meals state
+          setMeals(prevMeals => 
+            prevMeals.map(m => 
+              m.id === meal.id ? { ...m, isFavorite: false } : m
+            )
+          );
+          
+          setToastVisible(true);
+          setToastMessage(`${meal.name} removed from favorites`);
+          setToastType('success');
+        }
+      } else {
+        // Add to favorites
+        const response = await addMealToFavorites(meal.id);
+        if (response.success) {
+          const newFavorites = new Set(favoriteMealIds);
+          newFavorites.add(meal.id);
+          setFavoriteMealIds(newFavorites);
+          
+          // Update meals state
+          setMeals(prevMeals => 
+            prevMeals.map(m => 
+              m.id === meal.id ? { ...m, isFavorite: true } : m
+            )
+          );
+          
+          setToastVisible(true);
+          setToastMessage(`${meal.name} added to favorites`);
+          setToastType('success');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error toggling favorite:', error);
+      setToastVisible(true);
+      setToastMessage('Failed to update favorites. Please try again.');
+      setToastType('error');
+    }
   };
 
 // Fallback breakfast meals with proper images
@@ -228,6 +327,15 @@ const BREAKFAST_MEALS: Meal[] = [
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Personalization Status */}
+        {personalizationInfo.isPersonalized && (
+          <View style={styles.personalizationBanner}>
+            <Text style={styles.personalizationText}>
+              {personalizationInfo.summary}
+            </Text>
+          </View>
+        )}
+
         {/* Sort Section */}
         <View style={styles.sortContainer}>
           <Text style={styles.sortLabel}>Sort by</Text>
@@ -251,13 +359,17 @@ const BREAKFAST_MEALS: Meal[] = [
               >
                 <TouchableOpacity 
                   style={styles.heartButton}
-                  onPress={() => console.log('Heart pressed')}
+                  onPress={() => handleFavoriteToggle(meal)}
                 >
-                  <Ionicons name="heart-outline" size={20} color="#666" />
+                  <Ionicons 
+                    name={meal.isFavorite ? "heart" : "heart-outline"} 
+                    size={20} 
+                    color={meal.isFavorite ? "#ff4444" : "#666"} 
+                  />
                 </TouchableOpacity>
                 
                 {/* Card Content - Horizontal Layout */}
-                <View style={styles.cardContent}>
+                <View style={styles.mealContent}>
                   {/* Image on the left */}
                   <Image source={meal.image} style={styles.mealImage} />
                   
@@ -310,7 +422,7 @@ const BREAKFAST_MEALS: Meal[] = [
       </ScrollView>
       
       {/* Toast Component */}
-      <MealPlanToast
+      <NotificationToast
         visible={toastVisible}
         message={toastMessage}
         type={toastType}
@@ -349,6 +461,20 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  personalizationBanner: {
+    backgroundColor: colors.primary,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  personalizationText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
   sortContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -386,6 +512,10 @@ const styles = StyleSheet.create({
     elevation: 2,
     position: 'relative',
   },
+  mealContent: {
+    flexDirection: 'row',
+    gap: 12,
+  },
   heartButton: {
     position: 'absolute',
     top: 16,
@@ -394,10 +524,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: 16,
     padding: 4,
-  },
-  cardContent: {
-    flexDirection: 'row',
-    gap: 12,
   },
   mealImage: {
     width: 80,

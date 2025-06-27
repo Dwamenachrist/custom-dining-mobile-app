@@ -34,13 +34,6 @@ export default function RestaurantTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="search"
-        options={{
-          title: 'Search',
-          tabBarIcon: ({ color }) => <TabBarIcon name="search" color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="order"
         options={{
           title: 'Orders',

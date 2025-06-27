@@ -347,7 +347,12 @@ export default function ChangePasswordScreen() {
     }
 
     return (
-        <SafeAreaView className="flex-1 bg-lightGray">
+        <KeyboardAvoidingView
+            style={{ flex: 1, backgroundColor: colors.lightGray }}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+            <SafeAreaView style={{ flex: 1 }}>
             <StatusBar barStyle="dark-content" />
 
             {/* Temporary Password Toast */}
@@ -370,17 +375,13 @@ export default function ChangePasswordScreen() {
                 />
             </View>
 
-            <KeyboardAvoidingView
-                className="flex-1"
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
                 <ScrollView
                     contentContainerStyle={{
                         flexGrow: 1,
                         justifyContent: 'flex-start',
                         paddingTop: 20,
                         paddingHorizontal: 24,
-                        paddingBottom: 40,
+                        paddingBottom: 60,
                     }}
                     keyboardShouldPersistTaps="handled"
                     showsVerticalScrollIndicator={false}>
@@ -520,7 +521,7 @@ export default function ChangePasswordScreen() {
                     )}
 
                 </ScrollView>
-            </KeyboardAvoidingView>
         </SafeAreaView>
+        </KeyboardAvoidingView>
     );
 }

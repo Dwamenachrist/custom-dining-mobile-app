@@ -123,8 +123,7 @@ export interface LoginRequest {
 }
 
 class AuthService {
-  // 📝 STEP 2: Registration (Sign Up) - FIXED VERSION
-  // This is what happens when user clicks "Create Account"
+  // 📝 STEP 2: Registration (Sign Up) - IMPROVED BACKEND INTEGRATION
   async signup(formData: SignupFormData): Promise<ApiResponse<RegistrationResponse>> {
     try {
       console.log('👤 Starting user registration...');
@@ -133,60 +132,108 @@ class AuthService {
       const userType = await AsyncStorage.getItem('userType') || 'customer';
       const role = userType === 'customer' ? 'user' : 'restaurant'; // Backend expects 'user' for customers
       
-      // Transform frontend data to backend format as per API docs
+      // Transform frontend data to backend format
       const backendData = {
         username: `${formData.firstName} ${formData.lastName}`.trim(),
         email: formData.email,
         password: formData.password,
-        role: role, // Get role from userType instead of form data
+        role: role,
       };
       
       console.log('📤 Signup data for API:', backendData);
       
-      // Make API call using the auth API client with longer timeout
+      // Make API call using the auth API client
       const response = await authApi.post<RegistrationResponse>(ENDPOINTS.signup, backendData);
       
-      if (response.success) {
+      if (response.success && response.data) {
         console.log('✅ Registration successful!');
         
-        // Store additional frontend data locally for future use
-        await this.storeAdditionalUserData({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          phoneNumber: formData.phoneNumber,
-        });
-        
-        console.log('💾 Additional user data stored locally');
+        // Check backend response status
+        if (response.data.status === 'success') {
+          // Store additional frontend data locally for future use
+          await this.storeAdditionalUserData({
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            phoneNumber: formData.phoneNumber,
+          });
+          
+          // Store email for future reference
+          await AsyncStorage.setItem('userEmail', formData.email);
+          await AsyncStorage.setItem('userName', `${formData.firstName} ${formData.lastName}`);
+          await AsyncStorage.setItem('firstName', formData.firstName);
+          
+          console.log('💾 User data stored locally');
+          
+          return {
+            success: true,
+            message: response.data.message || 'Registration successful! Please check your email to verify your account.',
+            data: response.data,
+          };
+        } else {
+          console.log('❌ Backend registration failed:', response.data.message);
+          return {
+            success: false,
+            message: response.data.message || 'Registration failed',
+            error: 'Backend returned failure status',
+          };
+        }
       }
       
-      return response;
+      return {
+        success: false,
+        message: response.message || 'Registration failed',
+        error: response.error,
+      };
     } catch (error: any) {
       console.error('❌ Registration error:', error);
       
-      // Check if it's an axios error with a backend response
       if (error.response?.data) {
-        const backendMessage = error.response.data.message || 
-                              error.response.data.error ||
-                              `HTTP ${error.response.status}: ${error.response.statusText}`;
+        const errorData = error.response.data;
+        let message = 'Registration failed';
+        
+        // Extract error message from backend response
+        if (typeof errorData === 'string') {
+          message = errorData;
+        } else if (errorData?.message) {
+          message = errorData.message;
+        } else if (errorData?.error) {
+          message = errorData.error;
+        } else if (errorData?.errors && Array.isArray(errorData.errors)) {
+          // Handle validation errors array
+          message = errorData.errors.map((err: any) => 
+            typeof err === 'string' ? err : err.message || err.msg || String(err)
+          ).join(', ');
+        }
+        
+        // Handle specific error cases
+        if (message.toLowerCase().includes('email') && message.toLowerCase().includes('exists')) {
+          message = 'An account with this email already exists. Please try logging in instead.';
+        } else if (message.toLowerCase().includes('validation')) {
+          message = `Registration failed: ${message}`;
+        }
         
         return {
           success: false,
-          message: backendMessage,
-          error: error.response.data.error || error.response.statusText,
+          message: message,
+          error: errorData?.error || error.response.statusText,
+        };
+      } else if (error.request) {
+        return {
+          success: false,
+          message: 'Connection timeout. Please check your internet connection and try again.',
+          error: 'Network error',
+        };
+      } else {
+        return {
+          success: false,
+          message: 'An unexpected error occurred during registration. Please try again.',
+          error: error.message || 'Unknown error',
         };
       }
-      
-      // Fallback to generic message if no backend response
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Registration failed. Please try again.',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
     }
   }
 
-  // 📝 STEP 3: Login (Sign In) - FIXED VERSION
-  // This is what happens when user clicks "Sign In"
+  // 📝 STEP 3: Login (Sign In) - IMPROVED BACKEND INTEGRATION
   async login(credentials: LoginRequest): Promise<ApiResponse<AuthResponse>> {
     try {
       console.log('🔐 Starting user login...');
@@ -204,72 +251,106 @@ class AuthService {
       
       if (response.success && response.data) {
         console.log('✅ Login successful!');
-        console.log('🔍 FULL BACKEND RESPONSE:', JSON.stringify(response.data, null, 2));
+        console.log('🔍 Backend response:', response.data);
         
-        // Get user type from AsyncStorage (set during path selection)
-        const userType = await AsyncStorage.getItem('userType') || 'customer';
-        console.log('👤 User type from storage:', userType);
+        // Handle backend response properly
+        const backendData = response.data;
         
-        // Check if backend returned success status
-        if (response.data.status !== 'success') {
-          console.log('❌ Backend status not success:', response.data.status);
+        // Check status field from backend
+        if (backendData.status && backendData.status !== 'success') {
+          console.log('❌ Backend status not success:', backendData.status);
           return {
             success: false,
-            message: response.data.message || 'Login failed',
+            message: backendData.message || 'Login failed',
             error: 'Login unsuccessful',
           };
         }
 
-        // 🚨 ENFORCE EMAIL VERIFICATION - Critical Security Check
-        console.log('🔍 BACKEND RETURNED:', response.data);
-        console.log('🔍 isEmailVerified value:', response.data.isEmailVerified);
-        console.log('🔍 isEmailVerified type:', typeof response.data.isEmailVerified);
-        
-        // TEMPORARY FIX: Backend login endpoint is missing isEmailVerified field
-        // Until backend is fixed, assume successful login means email is verified
-        let isEmailVerified = response.data.isEmailVerified;
-        
-        if (isEmailVerified === undefined || isEmailVerified === null) {
-          console.log('⚠️ Backend missing isEmailVerified field - assuming verified since login succeeded');
-          // If backend allows login, assume email is verified
-          // Note: This should be fixed in backend to return proper isEmailVerified field
-          isEmailVerified = true;
+        // Handle JWT token
+        if (!backendData.token) {
+          console.error('❌ No token received from backend');
+          return {
+            success: false,
+            message: 'Authentication failed - no token received',
+            error: 'No token',
+          };
         }
-        
-        console.log('📧 Email verification status:', isEmailVerified);
 
-        // Store additional profile flags for routing decisions
-        await AsyncStorage.setItem('hasUserProfile', response.data.hasUserProfile.toString());
-        await AsyncStorage.setItem('forcePasswordChange', response.data.forcePasswordChange.toString());
+        // 🔒 CRITICAL: Use backend role as source of truth
+        const backendRole = backendData.role || 'user'; // Backend determines the actual role
+        const userType = backendRole === 'user' ? 'customer' : 'restaurant';
+        
+        console.log('👤 Backend role:', backendRole);
+        console.log('👤 Mapped user type:', userType);
+        
+        // Get selected userType from AsyncStorage (what user clicked)
+        const selectedUserType = await AsyncStorage.getItem('userType') || 'customer';
+        console.log('👤 User selected type:', selectedUserType);
+        
+        // 🚨 ROLE VALIDATION: Check if user is trying to login as wrong type
+        if (selectedUserType !== userType) {
+          console.log('❌ Role mismatch detected!');
+          console.log(`User selected: ${selectedUserType}, but account is: ${userType}`);
+          
+          const roleMessage = userType === 'customer' 
+            ? 'This account is registered as a Customer. Please use the Customer login.'
+            : 'This account is registered as a Restaurant. Please use the Restaurant login.';
+            
+          return {
+            success: false,
+            message: roleMessage,
+            error: 'Role mismatch',
+          };
+        }
+
+        // Email verification handling - improved logic
+        let isEmailVerified = true; // Default to true for now
+        
+        if (backendData.hasOwnProperty('isEmailVerified')) {
+          isEmailVerified = Boolean(backendData.isEmailVerified);
+          console.log('📧 Email verification from backend:', isEmailVerified);
+        } else {
+          console.log('⚠️ Backend missing isEmailVerified field - assuming verified since login succeeded');
+          // In production, you might want to make this more strict
+        }
+
+        // Handle profile and password flags with defaults
+        const hasUserProfile = Boolean(backendData.hasUserProfile ?? false);
+        const forcePasswordChange = Boolean(backendData.forcePasswordChange ?? false);
+
+        // Store profile flags for routing decisions
+        await AsyncStorage.setItem('hasUserProfile', hasUserProfile.toString());
+        await AsyncStorage.setItem('forcePasswordChange', forcePasswordChange.toString());
         await AsyncStorage.setItem('isEmailVerified', isEmailVerified.toString());
-        console.log('🏠 User profile status:', response.data.hasUserProfile ? 'Complete' : 'Needs setup');
-        console.log('🔒 Force password change:', response.data.forcePasswordChange);
-        console.log('📧 Email verified (corrected):', isEmailVerified);
+        await AsyncStorage.setItem('userEmail', credentials.email);
         
-        // Double-check: Read back what we just stored
-        const storedEmailVerified = await AsyncStorage.getItem('isEmailVerified');
-        console.log('🔍 Stored email verification status:', storedEmailVerified);
+        // 💾 Store the correct userType based on backend role
+        await AsyncStorage.setItem('userType', userType);
         
-        // Transform backend response to our format
+        console.log('🏠 User profile status:', hasUserProfile ? 'Complete' : 'Needs setup');
+        console.log('🔒 Force password change:', forcePasswordChange);
+        console.log('📧 Email verified:', isEmailVerified);
+        
+        // Transform backend response to our frontend format
         const authData: AuthResponse = {
-          token: response.data.token,
+          token: backendData.token,
           user: {
-            id: '', // TODO: Backend should return user ID or we decode from JWT
+            id: '', // Backend should provide this, decode from JWT if needed
             email: credentials.email,
-            role: userType === 'customer' ? 'user' : 'restaurant', // Map userType to role
-            isEmailVerified: isEmailVerified, // Use corrected verification status
-            hasProfile: response.data.hasUserProfile, // NEW: Add profile status
-            forcePasswordChange: response.data.forcePasswordChange, // NEW: Add password change requirement
+            role: backendRole, // ✅ Use actual backend role
+            isEmailVerified: isEmailVerified,
+            hasProfile: hasUserProfile,
+            forcePasswordChange: forcePasswordChange,
           }
         };
         
-        // Store authentication data (token, user info)
+        // Store authentication data
         await this.storeAuthData(authData);
         console.log('💾 Auth data stored successfully');
         
         return {
           success: true,
-          message: response.data.message || 'Login successful',
+          message: backendData.message || 'Login successful',
           data: authData,
         };
       }
@@ -282,25 +363,44 @@ class AuthService {
     } catch (error: any) {
       console.error('❌ Login error:', error);
       
-      // Check if it's an axios error with a backend response
       if (error.response?.data) {
-        const backendMessage = error.response.data.message || 
-                              error.response.data.error ||
-                              `HTTP ${error.response.status}: ${error.response.statusText}`;
+        const errorData = error.response.data;
+        let message = 'Login failed';
+        
+        // Extract error message from backend response
+        if (typeof errorData === 'string') {
+          message = errorData;
+        } else if (errorData?.message) {
+          message = errorData.message;
+        } else if (errorData?.error) {
+          message = errorData.error;
+        }
+        
+        // Handle specific error cases
+        if (message.toLowerCase().includes('verify') || message.toLowerCase().includes('verification')) {
+          message = 'Please verify your email address before logging in.';
+        } else if (message.toLowerCase().includes('invalid') || message.toLowerCase().includes('incorrect')) {
+          message = 'Invalid email or password. Please check your credentials.';
+        }
         
         return {
           success: false,
-          message: backendMessage,
-          error: error.response.data.error || error.response.statusText,
+          message: message,
+          error: errorData?.error || error.response.statusText,
+        };
+      } else if (error.request) {
+        return {
+          success: false,
+          message: 'Connection timeout. Please check your internet connection and try again.',
+          error: 'Network error',
+        };
+      } else {
+        return {
+          success: false,
+          message: 'An unexpected error occurred. Please try again.',
+          error: error.message || 'Unknown error',
         };
       }
-      
-      // Fallback to generic message if no backend response
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Login failed. Please check your credentials.',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
     }
   }
 
